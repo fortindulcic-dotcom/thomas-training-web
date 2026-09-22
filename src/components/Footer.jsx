@@ -30,12 +30,12 @@ function Footer() {
           {/* Columna 3: Contacto */}
           <Col md={4}>
             <h5 className="text-uppercase">Contáctanos</h5>
-            <ul className="list-unstyled text-muted">
+            <ul className="list-unstyled text-light">
               <li><strong>WhatsApp:</strong> +569 9548 4848</li>
               <li><strong>Email:</strong> contacto@thomasfortin.cl</li>
               <li><strong>Ubicación:</strong> Santiago, Chile</li>
             </ul>
-            <div className="mt-3">
+            <div className="mt-3 text-light">
               {/* Iconos sociales simulados */}
               <span className="me-2">Facebook</span>
               <span className="me-2">Instagram</span>
