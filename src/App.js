@@ -8,6 +8,7 @@ import Nosotros from './pages/Nosotros';
 import Contacto from './pages/Contacto';
 import Evaluacion from './pages/Evaluacion';
 import PlanDetalle from './pages/PlanDetalle';
+import Privacidad from './pages/Privacidad';
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
           <Route path="/" element={<Inicio />} />
           <Route path="/nosotros" element={<Nosotros />} />
           <Route path="/contacto" element={<Contacto />} />
+          <Route path="/privacidad" element={<Privacidad />} />
           <Route path="/evaluacion" element={<Evaluacion />} />
           {/* Páginas de detalle de cada plan, reutilizando el mismo componente PlanDetalle */}
           <Route

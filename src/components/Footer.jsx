@@ -23,6 +23,7 @@ function Footer() {
               <Nav.Link as={Link} to="/nosotros">Nosotros</Nav.Link>
               <Nav.Link as={Link} to="/evaluacion">Evaluación</Nav.Link>
               <Nav.Link as={Link} to="/contacto">Contacto</Nav.Link>
+              <Nav.Link as={Link} to="/privacidad">Política de Privacidad</Nav.Link>
             </Nav>
           </Col>
 
@@ -30,11 +31,9 @@ function Footer() {
           <Col md={4}>
             <h5 className="text-uppercase">Contáctanos</h5>
             <ul className="list-unstyled text-muted">
-              <li><i className="bi bi-envelope"></i> info@shutupandtrain.com</li>
-              <li><i className="bi bi-telephone"></i> +1 234 567 890</li>
-              <li>
-                <i className="bi bi-geo-alt"></i> Calle Fitness 123, Ciudad
-              </li>
+              <li><strong>WhatsApp:</strong> +569 95484848</li>
+              <li><strong>Email:</strong> contacto@thomasfortin.cl</li>
+              <li><strong>Ubicación:</strong> Santiago, Chile</li>
             </ul>
             <div className="mt-3">
               {/* Iconos sociales simulados */}
@@ -50,7 +49,7 @@ function Footer() {
         <Row className="text-center">
           <Col>
             <small className="text-muted">
-              © 2026 Shut Up and Train. Todos los derechos reservados.
+              © 2026 Thomas Fortin - Shut Up and Train. Todos los derechos reservados.
             </small>
           </Col>
         </Row>
