@@ -12,7 +12,7 @@ const Inicio = () => {
     const nombre = document.getElementById('nombreInput').value;
     const mensaje = document.getElementById('mensajeInput').value;
     if (nombre && mensaje) {
-      const numero = +56935430209;
+      const numero = '56995484848';
       const texto = `Hola, soy ${nombre}. ${mensaje}`;
       window.open(`https://wa.me/${numero}?text=${encodeURIComponent(texto)}`, '_blank');
     } else {

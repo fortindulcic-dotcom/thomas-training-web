@@ -31,7 +31,7 @@ function Footer() {
           <Col md={4}>
             <h5 className="text-uppercase">Contáctanos</h5>
             <ul className="list-unstyled text-muted">
-              <li><strong>WhatsApp:</strong> +569 95484848</li>
+              <li><strong>WhatsApp:</strong> +569 9548 4848</li>
               <li><strong>Email:</strong> contacto@thomasfortin.cl</li>
               <li><strong>Ubicación:</strong> Santiago, Chile</li>
             </ul>
