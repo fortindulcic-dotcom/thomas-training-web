@@ -32,7 +32,7 @@ function Footer() {
             <h5 className="text-uppercase">Contáctanos</h5>
             <ul className="list-unstyled text-light">
               <li><strong>WhatsApp:</strong> +569 9548 4848</li>
-              <li><strong>Email:</strong> contacto@thomasfortin.cl</li>
+              <li><strong>Email:</strong> thomas.fortinb29@gmail.com</li>
               <li><strong>Ubicación:</strong> Santiago, Chile</li>
             </ul>
             <div className="mt-3 text-light">
