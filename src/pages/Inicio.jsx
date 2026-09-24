@@ -43,32 +43,48 @@ const Inicio = () => {
       {/* 2. Sección de Planes */}
       <div className="container text-center mt-4">
         <div className="row">
-          {/* Plan Inicial */}
-          <div className="col-sm-12 col-md-4 mb-4">
+          {/* Plan Rutinas Prediseñadas */}
+          <div className="col-sm-12 col-md-6 col-lg-3 mb-4">
             <div className="border border-secondary rounded p-3 h-100">
-              <h3 className="text-primary">Plan Inicial</h3>
-              <p className="text-secondary">Beginners</p>
-              <img src="/images/Beginner.jpg" className="img-thumbnail mb-3 w-100" alt="Plan Inicial" style={{ width: '100%' }} />
-              <Link to="/plan-inicial" className="btn btn-primary w-100 fw-bold">+ Info</Link>
+              <h3 className="text-info">Rutinas Prediseñadas</h3>
+              <p className="text-secondary">Elige, paga y entrena</p>
+              <img
+                src="/images/rutinas_portada.jpg"
+                className="img-thumbnail mb-3 w-100"
+                alt="Rutinas Prediseñadas"
+              />
+              <Link to="/plan-rutinas" className="btn btn-info w-100 fw-bold text-white">
+                + Info
+              </Link>
+            </div>
+          </div>
+
+          {/* Plan Básico */}
+          <div className="col-sm-12 col-md-6 col-lg-3 mb-4">
+            <div className="border border-secondary rounded p-3 h-100">
+              <h3 className="text-primary">Plan Básico</h3>
+              <p className="text-secondary">Pago único</p>
+              <img src="/images/Beginner.jpg" className="img-thumbnail mb-3 w-100" alt="Plan Básico" />
+              <Link to="/plan-basico" className="btn btn-primary w-100 fw-bold">+ Info</Link>
             </div>
           </div>
 
           {/* Plan Intermedio */}
-          <div className="col-sm-12 col-md-4 mb-4">
+          <div className="col-sm-12 col-md-6 col-lg-3 mb-4">
             <div className="border border-secondary rounded p-3 h-100">
               <h3 className="text-success">Plan Intermedio</h3>
-              <p className="text-secondary">Intermediate</p>
-              <img src="/images/Intermediate.jpg" className="img-thumbnail mb-3 w-100" alt="Plan Intermedio" style={{ width: '100%' }} />
+              <p className="text-secondary">Con seguimiento</p>
+              <img src="/images/Intermediate.jpg" className="img-thumbnail mb-3 w-100" alt="Plan Intermedio" />
               <Link to="/plan-intermedio" className="btn btn-success w-100 fw-bold">+ Info</Link>
             </div>
           </div>
 
           {/* Plan Avanzado */}
-          <div className="col-sm-12 col-md-4 mb-4">
+          <div className="col-sm-12 col-md-6 col-lg-3 mb-4">
             <div className="border border-secondary rounded p-3 h-100">
               <h3 className="text-danger">Plan Avanzado</h3>
-              <p className="text-secondary">Advance</p>
-              <img src="/images/Advance.jpg" className="img-thumbnail mb-3 w-100" alt="Plan Avanzado" style={{ width: '100%' }} />
+              <p className="text-secondary">Presencial mensual</p>
+              <img src="/images/Advance.jpg" className="img-thumbnail mb-3 w-100" alt="Plan Avanzado" />
               <Link to="/plan-avanzado" className="btn btn-danger w-100 fw-bold">+ Info</Link>
             </div>
           </div>

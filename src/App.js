@@ -9,6 +9,9 @@ import Contacto from './pages/Contacto';
 import Evaluacion from './pages/Evaluacion';
 import PlanDetalle from './pages/PlanDetalle';
 import Privacidad from './pages/Privacidad';
+import Admin from './pages/Admin';
+import AdminPrecios from './pages/AdminPrecios';
+import PlanRutinas from './pages/PlanRutinas';
 
 function App() {
   return (
@@ -21,6 +24,10 @@ function App() {
           <Route path="/contacto" element={<Contacto />} />
           <Route path="/privacidad" element={<Privacidad />} />
           <Route path="/evaluacion" element={<Evaluacion />} />
+          <Route path="/admin" element={<Admin />}>
+            <Route path="precios" element={<AdminPrecios />} />
+          </Route>
+          <Route path="/plan-rutinas" element={<PlanRutinas />} />
           {/* Páginas de detalle de cada plan, reutilizando el mismo componente PlanDetalle */}
           <Route
             path="/plan-inicial"
