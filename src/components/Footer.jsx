@@ -1,21 +1,19 @@
 import React from 'react';
 import { Container, Row, Col, Nav } from 'react-bootstrap';
-import { Link } from 'react-router-dom'; // Usamos Link para navegación interna
+import { Link } from 'react-router-dom';
 
 function Footer() {
   return (
     <footer className="bg-dark text-white py-4 mt-auto">
       <Container>
         <Row>
-          {/* Columna 1: Información */}
           <Col md={4} className="mb-3 mb-md-0">
-            <h5 className="text-uppercase">Shut Up and Train</h5>
+            <h5 className="text-uppercase">Thomas Trainer</h5>
             <p className="text-muted">
               Tus rutinas personalizadas para alcanzar tus objetivos de fitness.
             </p>
           </Col>
 
-          {/* Columna 2: Enlaces rápidos */}
           <Col md={4} className="mb-3 mb-md-0">
             <h5 className="text-uppercase">Enlaces</h5>
             <Nav className="flex-column">
@@ -27,7 +25,6 @@ function Footer() {
             </Nav>
           </Col>
 
-          {/* Columna 3: Contacto */}
           <Col md={4}>
             <h5 className="text-uppercase">Contáctanos</h5>
             <ul className="list-unstyled text-light">
@@ -36,20 +33,18 @@ function Footer() {
               <li><strong>Ubicación:</strong> Santiago, Chile</li>
             </ul>
             <div className="mt-3 text-light">
-              {/* Iconos sociales simulados */}
               <span className="me-2">Facebook</span>
               <span className="me-2">Instagram</span>
               <span>TT</span>
             </div>
           </Col>
         </Row>
-        
-        {/* Línea divisoria y Copyright */}
+
         <hr className="my-4 border-secondary" />
         <Row className="text-center">
           <Col>
             <small className="text-muted">
-              © 2026 Thomas Fortin - Shut Up and Train. Todos los derechos reservados.
+              © 2026 Thomas Trainer - Todos los derechos reservados.
             </small>
           </Col>
         </Row>
