@@ -1,6 +1,4 @@
 // src/pages/PlanDetalle.jsx
-// Componente reutilizable: recibe los datos del plan por props y arma la página.
-// Se usa 3 veces desde App.js (Plan Inicial, Intermedio y Avanzado) sin repetir código.
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Container, Row, Col, ListGroup } from 'react-bootstrap';
@@ -26,7 +24,7 @@ const PlanDetalle = ({ nombre, imagen, colorClass, caracteristicas }) => {
             ))}
           </ListGroup>
           <div className="d-flex flex-wrap gap-2">
-            <Link to="/contacto" className="btn btn-success fw-bold">
+            <Link to={`/admision?plan=${nombre}`} className="btn btn-success fw-bold">
               Quiero este plan
             </Link>
             <Link to="/" className="btn btn-outline-secondary fw-bold">

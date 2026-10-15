@@ -11,7 +11,13 @@ import PlanDetalle from './pages/PlanDetalle';
 import Privacidad from './pages/Privacidad';
 import Admin from './pages/Admin';
 import AdminPrecios from './pages/AdminPrecios';
+import AdminGenerarRutina from './pages/AdminGenerarRutina';
+import AdminPagosPendientes from './pages/AdminPagosPendientes';
 import PlanRutinas from './pages/PlanRutinas';
+import Admision from './pages/Admision';
+import AdminClientes from './pages/AdminClientes';
+import MiRutina from './pages/MiRutina';
+import AdminEditarRutina from './pages/AdminEditarRutina';
 
 function App() {
   return (
@@ -24,16 +30,27 @@ function App() {
           <Route path="/contacto" element={<Contacto />} />
           <Route path="/privacidad" element={<Privacidad />} />
           <Route path="/evaluacion" element={<Evaluacion />} />
+          <Route path="/admision" element={<Admision />} />
+          <Route path="/r/:token" element={<MiRutina />} />
+          <Route path="rutina/:rutinaId" element={<AdminEditarRutina />} />
+
+          {/* Rutas del panel de administración */}
           <Route path="/admin" element={<Admin />}>
             <Route path="precios" element={<AdminPrecios />} />
+            <Route path="generar-rutina" element={<AdminGenerarRutina />} />
+            <Route path="pagos-pendientes" element={<AdminPagosPendientes />} />
+            <Route path="clientes" element={<AdminClientes />} />
+            <Route path="rutina/:rutinaId" element={<AdminEditarRutina />} />
           </Route>
+          
           <Route path="/plan-rutinas" element={<PlanRutinas />} />
-          {/* Páginas de detalle de cada plan, reutilizando el mismo componente PlanDetalle */}
+
+          {/* Páginas de detalle de cada plan */}
           <Route
-            path="/plan-inicial"
+            path="/plan-basico"
             element={
               <PlanDetalle
-                nombre="Inicial"
+                nombre="Básico"
                 imagen="/images/Beginner.jpg"
                 colorClass="text-primary"
                 caracteristicas={[
