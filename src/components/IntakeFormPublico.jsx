@@ -22,6 +22,30 @@ const IntakeFormPublico = ({ onDatosListos, datosIniciales }) => {
   const [nivelRecomendado, setNivelRecomendado] = useState('');
   const [alerta, setAlerta] = useState(null);
 
+  // Función para normalizar el teléfono chileno
+  const normalizarTelefono = (tel) => {
+    if (!tel) return '';
+    // Eliminar todo lo que no sea número o '+'
+    let limpio = tel.replace(/[^0-9+]/g, '');
+    // Si empieza con '+56', quitamos el '+56' temporalmente
+    if (limpio.startsWith('+56')) {
+      limpio = limpio.substring(3);
+    } else if (limpio.startsWith('56')) {
+      limpio = limpio.substring(2);
+    }
+    // Ahora limpio tiene solo el número sin código de país
+    // Si no empieza con 9, se lo agregamos (celular chileno)
+    if (!limpio.startsWith('9')) {
+      limpio = '9' + limpio;
+    }
+    // Si tiene más de 9 dígitos (ej: 995462032), tomamos los últimos 9
+    if (limpio.length > 9) {
+      limpio = limpio.slice(-9);
+    }
+    return '+56' + limpio;
+  };
+
+  // Calcular IMC
   useEffect(() => {
     const peso = parseFloat(formData.peso);
     const altura = parseFloat(formData.altura) / 100;
@@ -33,6 +57,7 @@ const IntakeFormPublico = ({ onDatosListos, datosIniciales }) => {
     }
   }, [formData.peso, formData.altura]);
 
+  // Calcular nivel recomendado
   useEffect(() => {
     const meses = parseInt(formData.meses_entrenando);
     const imcVal = parseFloat(imc);
@@ -104,8 +129,12 @@ const IntakeFormPublico = ({ onDatosListos, datosIniciales }) => {
       if (!confirmar) return;
     }
 
+    // Normalizar el teléfono antes de enviar
+    const telefonoNormalizado = normalizarTelefono(formData.telefono);
+
     onDatosListos({
       ...formData,
+      telefono: telefonoNormalizado,
       imc: imc ? parseFloat(imc) : null,
       nivel_recomendado: nivelRecomendado
     });
@@ -136,8 +165,18 @@ const IntakeFormPublico = ({ onDatosListos, datosIniciales }) => {
           <Row>
             <Col md={6}>
               <Form.Group className="mb-3">
-                <Form.Label>WhatsApp (con +56) *</Form.Label>
-                <Form.Control type="tel" name="telefono" value={formData.telefono} onChange={handleChange} placeholder="+56912345678" required />
+                <Form.Label>WhatsApp *</Form.Label>
+                <Form.Control
+                  type="tel"
+                  name="telefono"
+                  value={formData.telefono}
+                  onChange={handleChange}
+                  placeholder="Ej: 935430209 o +56935430209"
+                  required
+                />
+                <Form.Text className="text-muted">
+                  Escribe tu número con o sin +56. Lo normalizamos automáticamente.
+                </Form.Text>
               </Form.Group>
             </Col>
             <Col md={6}>

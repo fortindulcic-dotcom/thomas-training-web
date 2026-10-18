@@ -155,6 +155,24 @@ const AdminEditarRutina = () => {
     cargarRutina();
   };
 
+  // Normalizar el teléfono antes de generar el link de WhatsApp
+  const normalizarTelefono = (tel) => {
+    if (!tel) return '';
+    let limpio = tel.replace(/[^0-9+]/g, '');
+    if (limpio.startsWith('+56')) {
+      limpio = limpio.substring(3);
+    } else if (limpio.startsWith('56')) {
+      limpio = limpio.substring(2);
+    }
+    if (!limpio.startsWith('9')) {
+      limpio = '9' + limpio;
+    }
+    if (limpio.length > 9) {
+      limpio = limpio.slice(-9);
+    }
+    return '56' + limpio;
+  };
+
   const aprobarRutina = async () => {
     if (!window.confirm('¿Aprobar esta rutina? Se generará un link único y se abrirá WhatsApp para enviárselo al cliente.')) return;
 
@@ -225,11 +243,10 @@ const AdminEditarRutina = () => {
       `— Thomas Fortin`
     );
 
-    const telefono = cliente.telefono.replace(/\D/g, '');
+    const telefono = normalizarTelefono(cliente.telefono);
     const urlWA = `https://wa.me/${telefono}?text=${mensajeWhatsApp}`;
     setUrlWhatsApp(urlWA);
 
-    // Intentar abrir WhatsApp automáticamente (puede ser bloqueado por el navegador)
     const ventanaWhatsApp = window.open(urlWA, '_blank');
     if (!ventanaWhatsApp) {
       console.warn('El navegador bloqueó la ventana de WhatsApp. Usa el botón del modal.');
@@ -243,6 +260,11 @@ const AdminEditarRutina = () => {
   const copiarLink = () => {
     navigator.clipboard.writeText(linkGenerado);
     alert('✅ Link copiado al portapapeles');
+  };
+
+  const volverALista = () => {
+    setMostrarModalLink(false);
+    navigate('/admin/generar-rutina');
   };
 
   if (cargando) {
@@ -426,7 +448,7 @@ const AdminEditarRutina = () => {
           <Button
             variant="success"
             size="lg"
-            className="w-100"
+            className="w-100 mb-2"
             href={urlWhatsApp}
             target="_blank"
             rel="noreferrer"
@@ -434,8 +456,17 @@ const AdminEditarRutina = () => {
             💬 Abrir WhatsApp y enviar
           </Button>
 
+          <Button
+            variant="outline-secondary"
+            size="lg"
+            className="w-100"
+            onClick={volverALista}
+          >
+            ← Volver a la lista de rutinas
+          </Button>
+
           <small className="text-muted d-block mt-3">
-            Si WhatsApp no se abrió automáticamente, usa este botón. El link es único para {cliente.nombre} y expira el {rutina.fecha_vencimiento ? new Date(rutina.fecha_vencimiento).toLocaleDateString('es-CL') : '—'}.
+            El link es único para {cliente.nombre} y expira el {rutina.fecha_vencimiento ? new Date(rutina.fecha_vencimiento).toLocaleDateString('es-CL') : '—'}.
           </small>
         </Modal.Body>
       </Modal>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Container, Table, Badge, Alert, Spinner, Form, Row, Col, Card } from 'react-bootstrap';
+import { Container, Table, Badge, Alert, Spinner, Form, Row, Col, Card, Button } from 'react-bootstrap';
 import { supabase } from '../utils/supabase';
 import { useEsMovil } from '../utils/useEsMovil';
 
@@ -16,7 +16,15 @@ const AdminClientes = () => {
     setCargando(true);
     const { data, error } = await supabase
       .from('clientes')
-      .select('*')
+      .select(`
+        *,
+        rutinas (
+          id,
+          token,
+          estado,
+          fecha_vencimiento
+        )
+      `)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -48,6 +56,12 @@ const AdminClientes = () => {
     }
     setFiltrados(resultado);
   }, [busqueda, filtroPago, clientes]);
+
+  const copiarLink = (token) => {
+    const link = `${window.location.origin}/r/${token}`;
+    navigator.clipboard.writeText(link);
+    alert('✅ Link copiado al portapapeles');
+  };
 
   if (cargando) {
     return (
@@ -94,47 +108,58 @@ const AdminClientes = () => {
       {filtrados.length === 0 ? (
         <Alert variant="info">No se encontraron clientes con esos filtros.</Alert>
       ) : esMovil ? (
-        // ===== VISTA MÓVIL: TARJETAS =====
         <div className="d-flex flex-column gap-2">
-          {filtrados.map((c) => (
-            <Card key={c.id} className="border-0 shadow-sm">
-              <Card.Body className="p-3">
-                <div className="d-flex justify-content-between align-items-start mb-2">
-                  <div>
-                    <strong className="d-block">{c.nombre}</strong>
-                    <small className="text-muted">
-                      {new Date(c.created_at).toLocaleDateString('es-CL')}
-                    </small>
+          {filtrados.map((c) => {
+            const rutina = c.rutinas && c.rutinas[0];
+            return (
+              <Card key={c.id} className="border-0 shadow-sm">
+                <Card.Body className="p-3">
+                  <div className="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                      <strong className="d-block">{c.nombre}</strong>
+                      <small className="text-muted">
+                        {new Date(c.created_at).toLocaleDateString('es-CL')}
+                      </small>
+                    </div>
+                    {c.pago_verificado ? (
+                      <Badge bg="success">✅ Pagado</Badge>
+                    ) : (
+                      <Badge bg="warning" text="dark">⏳ Pendiente</Badge>
+                    )}
                   </div>
-                  {c.pago_verificado ? (
-                    <Badge bg="success">✅ Pagado</Badge>
-                  ) : (
-                    <Badge bg="warning" text="dark">⏳ Pendiente</Badge>
+                  <div className="small mb-2">
+                    <div>📧 {c.email}</div>
+                    <div>📱 {c.telefono}</div>
+                  </div>
+                  <div className="d-flex gap-2 flex-wrap mb-2">
+                    <Badge bg="primary">{c.nivel_experiencia}</Badge>
+                    <Badge bg="secondary">IMC: {c.imc || '-'}</Badge>
+                  </div>
+                  {rutina && rutina.token && (
+                    <div className="d-flex gap-2">
+                      <Button
+                        variant="outline-info"
+                        size="sm"
+                        onClick={() => copiarLink(rutina.token)}
+                      >
+                        🔗 Copiar link rutina
+                      </Button>
+                      <a
+                        href={`${window.location.origin}/r/${rutina.token}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-sm btn-outline-primary"
+                      >
+                        👁️ Ver
+                      </a>
+                    </div>
                   )}
-                </div>
-                <div className="small mb-2">
-                  <div>📧 {c.email}</div>
-                  <div>📱 {c.telefono}</div>
-                </div>
-                <div className="d-flex gap-2 flex-wrap">
-                  <Badge bg="primary">{c.nivel_experiencia}</Badge>
-                  <Badge bg="secondary">IMC: {c.imc || '-'}</Badge>
-                  <a
-                    href={`https://wa.me/${c.telefono?.replace(/\D/g, '')}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn btn-sm btn-outline-success py-0"
-                    style={{ fontSize: '0.75rem' }}
-                  >
-                    💬 WhatsApp
-                  </a>
-                </div>
-              </Card.Body>
-            </Card>
-          ))}
+                </Card.Body>
+              </Card>
+            );
+          })}
         </div>
       ) : (
-        // ===== VISTA DESKTOP: TABLA =====
         <div className="bg-white rounded shadow-sm">
           <Table hover responsive className="mb-0">
             <thead className="bg-light">
@@ -146,36 +171,63 @@ const AdminClientes = () => {
                 <th>Plan</th>
                 <th>IMC</th>
                 <th>Estado Pago</th>
+                <th>Link Rutina</th>
               </tr>
             </thead>
             <tbody>
-              {filtrados.map((c) => (
-                <tr key={c.id}>
-                  <td className="text-nowrap">
-                    {new Date(c.created_at).toLocaleDateString('es-CL', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric'
-                    })}
-                  </td>
-                  <td className="fw-bold">{c.nombre}</td>
-                  <td>{c.email}</td>
-                  <td>
-                    <a href={`https://wa.me/${c.telefono?.replace(/\D/g, '')}`} target="_blank" rel="noreferrer">
-                      {c.telefono}
-                    </a>
-                  </td>
-                  <td><Badge bg="primary">{c.nivel_experiencia}</Badge></td>
-                  <td>{c.imc || '-'}</td>
-                  <td>
-                    {c.pago_verificado ? (
-                      <Badge bg="success">✅ Pagado</Badge>
-                    ) : (
-                      <Badge bg="warning" text="dark">⏳ Pendiente</Badge>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {filtrados.map((c) => {
+                const rutina = c.rutinas && c.rutinas[0];
+                return (
+                  <tr key={c.id}>
+                    <td className="text-nowrap">
+                      {new Date(c.created_at).toLocaleDateString('es-CL', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric'
+                      })}
+                    </td>
+                    <td className="fw-bold">{c.nombre}</td>
+                    <td>{c.email}</td>
+                    <td>
+                      <a href={`https://wa.me/${c.telefono?.replace(/\D/g, '')}`} target="_blank" rel="noreferrer">
+                        {c.telefono}
+                      </a>
+                    </td>
+                    <td><Badge bg="primary">{c.nivel_experiencia}</Badge></td>
+                    <td>{c.imc || '-'}</td>
+                    <td>
+                      {c.pago_verificado ? (
+                        <Badge bg="success">✅ Pagado</Badge>
+                      ) : (
+                        <Badge bg="warning" text="dark">⏳ Pendiente</Badge>
+                      )}
+                    </td>
+                    <td>
+                      {rutina && rutina.token ? (
+                        <div className="d-flex gap-1">
+                          <Button
+                            variant="outline-info"
+                            size="sm"
+                            onClick={() => copiarLink(rutina.token)}
+                          >
+                            🔗 Copiar
+                          </Button>
+                          <a
+                            href={`${window.location.origin}/r/${rutina.token}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="btn btn-sm btn-outline-primary"
+                          >
+                            👁️
+                          </a>
+                        </div>
+                      ) : (
+                        <span className="text-muted small">Sin rutina</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </Table>
         </div>

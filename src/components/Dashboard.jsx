@@ -93,20 +93,17 @@ const Dashboard = () => {
     const mesActual = hoy.getMonth();
     const primerDiaMes = new Date(añoActual, mesActual, 1).toISOString();
 
-    // ===== 1. Clientes totales (SOLO pagados) =====
     const { count: totalClientes } = await supabase
       .from('clientes')
       .select('*', { count: 'exact', head: true })
       .eq('estado_pago', 'pagado');
 
-    // ===== 1b. Clientes del mes (SOLO pagados) =====
     const { count: clientesMes } = await supabase
       .from('clientes')
       .select('*', { count: 'exact', head: true })
       .eq('estado_pago', 'pagado')
       .gte('created_at', primerDiaMes);
 
-    // ===== 2. Pagos del mes (todos los que llegaron al pago) =====
     const { data: pagosMes } = await supabase
       .from('clientes')
       .select('pago_verificado, estado_pago')
@@ -115,7 +112,6 @@ const Dashboard = () => {
     const pagosConfirmados = (pagosMes || []).filter(p => p.pago_verificado).length;
     const pagosPendientes = (pagosMes || []).filter(p => !p.pago_verificado).length;
 
-    // ===== 3. Rutinas del mes =====
     const { data: rutinasMes } = await supabase
       .from('rutinas')
       .select('estado')
@@ -124,7 +120,6 @@ const Dashboard = () => {
     const rutinasActivas = (rutinasMes || []).filter(r => r.estado === 'activa').length;
     const rutinasBorrador = (rutinasMes || []).filter(r => r.estado === 'borrador').length;
 
-    // ===== 4. Tasa de renovación (SOLO clientes pagados) =====
     const { data: todosClientes } = await supabase
       .from('clientes')
       .select('es_renovacion, nivel_experiencia, tipo_producto, created_at')
@@ -134,7 +129,6 @@ const Dashboard = () => {
     const totalNuevos = (todosClientes || []).filter(c => !c.es_renovacion).length;
     const tasaRenovacion = totalNuevos > 0 ? ((totalRenovaciones / totalNuevos) * 100).toFixed(0) : 0;
 
-    // ===== 5. Datos mensuales (últimos 12 meses) =====
     const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     const datos12Meses = [];
 
@@ -161,7 +155,6 @@ const Dashboard = () => {
 
     const datosConTendencia = calcularTendencia(datos12Meses);
 
-    // ===== 6. Clientes por plan =====
     const planesCount = {};
     (todosClientes || []).forEach(c => {
       const plan = c.tipo_producto === 'rutina_prediseñada' ? 'Rutinas Prediseñadas' : c.nivel_experiencia;
@@ -173,7 +166,6 @@ const Dashboard = () => {
       value: planesCount[plan]
     }));
 
-    // ===== 7. Últimos 5 clientes (SOLO pagados) =====
     const { data: recientes } = await supabase
       .from('clientes')
       .select('*')
@@ -228,7 +220,6 @@ const Dashboard = () => {
 
   return (
     <>
-      {/* HEADER */}
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-2">
         <div>
           <h4 className="fw-bold mb-1">Bienvenido, Thomas 👋</h4>
@@ -237,7 +228,6 @@ const Dashboard = () => {
         <Badge bg="success" className="p-2">● Sistema activo</Badge>
       </div>
 
-      {/* FILA 1: KPIs */}
       <Row className="g-3 mb-4">
         <Col xs={12} sm={6} lg={3}>
           <Card className="border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
@@ -300,7 +290,6 @@ const Dashboard = () => {
         </Col>
       </Row>
 
-      {/* FILA 2: GRÁFICO PRINCIPAL */}
       <Card className="border-0 shadow-sm mb-4">
         <Card.Body className="p-3">
           <div className="mb-3">
@@ -338,7 +327,6 @@ const Dashboard = () => {
         </Card.Body>
       </Card>
 
-      {/* FILA 3: 3 DONAS */}
       <Row className="g-3 mb-4">
         <Col xs={12} md={4}>
           <Card className="border-0 shadow-sm h-100">
@@ -421,8 +409,6 @@ const Dashboard = () => {
                     outerRadius={75}
                     paddingAngle={3}
                     dataKey="value"
-                    label={esMovil ? false : ({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    labelLine={false}
                   >
                     {clientesPorPlan.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={PLAN_COLORS[entry.name] || COLORS.primary} />
@@ -431,6 +417,29 @@ const Dashboard = () => {
                   <Tooltip />
                 </PieChart>
               </ResponsiveContainer>
+
+              {/* LEYENDA MANUAL */}
+              <div className="mt-2">
+                {clientesPorPlan.map((plan) => (
+                  <div key={plan.name} className="d-flex align-items-center justify-content-between small mb-1">
+                    <div className="d-flex align-items-center">
+                      <span
+                        style={{
+                          width: '12px',
+                          height: '12px',
+                          borderRadius: '3px',
+                          backgroundColor: PLAN_COLORS[plan.name] || COLORS.primary,
+                          display: 'inline-block',
+                          marginRight: '8px'
+                        }}
+                      ></span>
+                      <span>{plan.name}</span>
+                    </div>
+                    <strong>{plan.value}</strong>
+                  </div>
+                ))}
+              </div>
+
               <div className="mt-2 text-center">
                 <small className="text-muted" style={{ fontSize: '0.75rem' }}>
                   {clientesPorPlan.reduce((acc, p) => acc + p.value, 0)} clientes acumulados
@@ -441,7 +450,6 @@ const Dashboard = () => {
         </Col>
       </Row>
 
-      {/* FILA 4: ÚLTIMOS CLIENTES */}
       <Card className="border-0 shadow-sm">
         <Card.Body className="p-3">
           <div className="d-flex justify-content-between align-items-center mb-3">
