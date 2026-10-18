@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Row, Col, Card, Badge, Spinner, Table, Button } from 'react-bootstrap';
+import { Row, Col, Card, Badge, Spinner, Table, Button, ListGroup } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import {
   Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -65,7 +65,9 @@ const Dashboard = () => {
     clientesMes: 0,
     pagosMes: { total: 0, confirmados: 0, pendientes: 0 },
     rutinasMes: { total: 0, activas: 0, borradores: 0 },
-    tasaRenovacion: 0
+    tasaRenovacion: 0,
+    porVencer: [],
+    vencidos: []
   });
   const [datosMensuales, setDatosMensuales] = useState([]);
   const [clientesPorPlan, setClientesPorPlan] = useState([]);
@@ -92,7 +94,12 @@ const Dashboard = () => {
     const añoActual = hoy.getFullYear();
     const mesActual = hoy.getMonth();
     const primerDiaMes = new Date(añoActual, mesActual, 1).toISOString();
+    const hoyStr = hoy.toISOString().split('T')[0];
+    const en5dias = new Date(hoy);
+    en5dias.setDate(en5dias.getDate() + 5);
+    const en5diasStr = en5dias.toISOString().split('T')[0];
 
+    // ===== 1. Clientes totales =====
     const { count: totalClientes } = await supabase
       .from('clientes')
       .select('*', { count: 'exact', head: true })
@@ -104,6 +111,7 @@ const Dashboard = () => {
       .eq('estado_pago', 'pagado')
       .gte('created_at', primerDiaMes);
 
+    // ===== 2. Pagos del mes =====
     const { data: pagosMes } = await supabase
       .from('clientes')
       .select('pago_verificado, estado_pago')
@@ -112,6 +120,7 @@ const Dashboard = () => {
     const pagosConfirmados = (pagosMes || []).filter(p => p.pago_verificado).length;
     const pagosPendientes = (pagosMes || []).filter(p => !p.pago_verificado).length;
 
+    // ===== 3. Rutinas del mes =====
     const { data: rutinasMes } = await supabase
       .from('rutinas')
       .select('estado')
@@ -120,6 +129,7 @@ const Dashboard = () => {
     const rutinasActivas = (rutinasMes || []).filter(r => r.estado === 'activa').length;
     const rutinasBorrador = (rutinasMes || []).filter(r => r.estado === 'borrador').length;
 
+    // ===== 4. Tasa de renovación =====
     const { data: todosClientes } = await supabase
       .from('clientes')
       .select('es_renovacion, nivel_experiencia, tipo_producto, created_at')
@@ -129,9 +139,36 @@ const Dashboard = () => {
     const totalNuevos = (todosClientes || []).filter(c => !c.es_renovacion).length;
     const tasaRenovacion = totalNuevos > 0 ? ((totalRenovaciones / totalNuevos) * 100).toFixed(0) : 0;
 
+    // ===== 5. Por Vencer (≤5 días) =====
+    const { data: porVencerData } = await supabase
+      .from('rutinas')
+      .select(`
+        id,
+        fecha_vencimiento,
+        token,
+        clientes:cliente_id (nombre, telefono, email)
+      `)
+      .gte('fecha_vencimiento', hoyStr)
+      .lte('fecha_vencimiento', en5diasStr)
+      .eq('estado', 'activa')
+      .order('fecha_vencimiento', { ascending: true });
+
+    // ===== 6. Vencidos (sin renovar) =====
+    const { data: vencidosData } = await supabase
+      .from('rutinas')
+      .select(`
+        id,
+        fecha_vencimiento,
+        token,
+        clientes:cliente_id (nombre, telefono, email)
+      `)
+      .lt('fecha_vencimiento', hoyStr)
+      .eq('estado', 'activa')
+      .order('fecha_vencimiento', { ascending: false });
+
+    // ===== 7. Datos mensuales =====
     const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     const datos12Meses = [];
-
     const fechaInicio = new Date(añoActual, mesActual - 11, 1);
 
     for (let i = 0; i < 12; i++) {
@@ -155,6 +192,7 @@ const Dashboard = () => {
 
     const datosConTendencia = calcularTendencia(datos12Meses);
 
+    // ===== 8. Clientes por plan =====
     const planesCount = {};
     (todosClientes || []).forEach(c => {
       const plan = c.tipo_producto === 'rutina_prediseñada' ? 'Rutinas Prediseñadas' : c.nivel_experiencia;
@@ -166,6 +204,7 @@ const Dashboard = () => {
       value: planesCount[plan]
     }));
 
+    // ===== 9. Últimos 5 clientes =====
     const { data: recientes } = await supabase
       .from('clientes')
       .select('*')
@@ -186,12 +225,27 @@ const Dashboard = () => {
         activas: rutinasActivas,
         borradores: rutinasBorrador
       },
-      tasaRenovacion: parseInt(tasaRenovacion)
+      tasaRenovacion: parseInt(tasaRenovacion),
+      porVencer: porVencerData || [],
+      vencidos: vencidosData || []
     });
     setDatosMensuales(datosConTendencia);
     setClientesPorPlan(distribucionPlanes);
     setUltimosClientes(recientes || []);
     setCargando(false);
+  };
+
+  // Enviar recordatorio por WhatsApp
+  const enviarRecordatorio = (rutina, tipo) => {
+    const cliente = rutina.clientes;
+    if (!cliente) return;
+
+    const mensaje = tipo === 'por_vencer'
+      ? `¡Hola ${cliente.nombre}! 💪\n\nTu plan de entrenamiento vence el ${new Date(rutina.fecha_vencimiento).toLocaleDateString('es-CL')}.\n\n¿Quieres renovar para seguir con tu progreso? Aquí puedes hacerlo: ${window.location.origin}/r/${rutina.token}\n\n¡Vamos con todo! 🔥\n\n— Thomas Fortin`
+      : `¡Hola ${cliente.nombre}! 👋\n\nTu plan de entrenamiento venció el ${new Date(rutina.fecha_vencimiento).toLocaleDateString('es-CL')}.\n\n¿Quieres retomar tu entrenamiento? Escríbeme para coordinar tu renovación.\n\n¡Te esperamos! 💪\n\n— Thomas Fortin`;
+
+    const telefono = cliente.telefono.replace(/[^0-9]/g, '');
+    window.open(`https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`, '_blank');
   };
 
   if (cargando) {
@@ -220,6 +274,7 @@ const Dashboard = () => {
 
   return (
     <>
+      {/* HEADER */}
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-2">
         <div>
           <h4 className="fw-bold mb-1">Bienvenido, Thomas 👋</h4>
@@ -228,68 +283,70 @@ const Dashboard = () => {
         <Badge bg="success" className="p-2">● Sistema activo</Badge>
       </div>
 
+      {/* FILA 1: KPIs (6 tarjetas) */}
       <Row className="g-3 mb-4">
-        <Col xs={12} sm={6} lg={3}>
+        <Col xs={6} lg={2}>
           <Card className="border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
             <Card.Body className="p-3">
-              <div className="d-flex justify-content-between align-items-start">
-                <div>
-                  <p className="mb-1 opacity-75 small">Clientes Totales</p>
-                  <h3 className="fw-bold mb-0">{stats.clientesTotales}</h3>
-                  <small className="opacity-75">+{stats.clientesMes} este mes</small>
-                </div>
-                <div style={{ fontSize: '2rem' }}>👥</div>
-              </div>
+              <p className="mb-1 opacity-75 small">Clientes</p>
+              <h4 className="fw-bold mb-0">{stats.clientesTotales}</h4>
+              <small className="opacity-75">+{stats.clientesMes}</small>
             </Card.Body>
           </Card>
         </Col>
 
-        <Col xs={12} sm={6} lg={3}>
+        <Col xs={6} lg={2}>
           <Card className="border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)', color: 'white' }}>
             <Card.Body className="p-3">
-              <div className="d-flex justify-content-between align-items-start">
-                <div>
-                  <p className="mb-1 opacity-75 small">Pagos del Mes</p>
-                  <h3 className="fw-bold mb-0">{stats.pagosMes.confirmados}/{stats.pagosMes.total}</h3>
-                  <small className="opacity-75">{porcentajePagos}% confirmados</small>
-                </div>
-                <div style={{ fontSize: '2rem' }}>💰</div>
-              </div>
+              <p className="mb-1 opacity-75 small">Pagos</p>
+              <h4 className="fw-bold mb-0">{stats.pagosMes.confirmados}/{stats.pagosMes.total}</h4>
+              <small className="opacity-75">{porcentajePagos}%</small>
             </Card.Body>
           </Card>
         </Col>
 
-        <Col xs={12} sm={6} lg={3}>
+        <Col xs={6} lg={2}>
           <Card className="border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', color: 'white' }}>
             <Card.Body className="p-3">
-              <div className="d-flex justify-content-between align-items-start">
-                <div>
-                  <p className="mb-1 opacity-75 small">Rutinas del Mes</p>
-                  <h3 className="fw-bold mb-0">{stats.rutinasMes.activas}/{stats.rutinasMes.total}</h3>
-                  <small className="opacity-75">{stats.rutinasMes.borradores} por revisar</small>
-                </div>
-                <div style={{ fontSize: '2rem' }}>📝</div>
-              </div>
+              <p className="mb-1 opacity-75 small">Rutinas</p>
+              <h4 className="fw-bold mb-0">{stats.rutinasMes.activas}/{stats.rutinasMes.total}</h4>
+              <small className="opacity-75">{stats.rutinasMes.borradores} borr.</small>
             </Card.Body>
           </Card>
         </Col>
 
-        <Col xs={12} sm={6} lg={3}>
+        <Col xs={6} lg={2}>
           <Card className="border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', color: 'white' }}>
             <Card.Body className="p-3">
-              <div className="d-flex justify-content-between align-items-start">
-                <div>
-                  <p className="mb-1 opacity-75 small">Tasa Renovación</p>
-                  <h3 className="fw-bold mb-0">{stats.tasaRenovacion}%</h3>
-                  <small className="opacity-75">Clientes que vuelven</small>
-                </div>
-                <div style={{ fontSize: '2rem' }}>🔄</div>
-              </div>
+              <p className="mb-1 opacity-75 small">Renovación</p>
+              <h4 className="fw-bold mb-0">{stats.tasaRenovacion}%</h4>
+              <small className="opacity-75">vuelven</small>
+            </Card.Body>
+          </Card>
+        </Col>
+
+        <Col xs={6} lg={2}>
+          <Card className="border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)', color: 'white' }}>
+            <Card.Body className="p-3">
+              <p className="mb-1 opacity-75 small">🔄 Por Vencer</p>
+              <h4 className="fw-bold mb-0">{stats.porVencer.length}</h4>
+              <small className="opacity-75">≤5 días</small>
+            </Card.Body>
+          </Card>
+        </Col>
+
+        <Col xs={6} lg={2}>
+          <Card className="border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)', color: 'white' }}>
+            <Card.Body className="p-3">
+              <p className="mb-1 opacity-75 small">⚠️ Vencidos</p>
+              <h4 className="fw-bold mb-0">{stats.vencidos.length}</h4>
+              <small className="opacity-75">sin renovar</small>
             </Card.Body>
           </Card>
         </Col>
       </Row>
 
+      {/* FILA 2: GRÁFICO PRINCIPAL */}
       <Card className="border-0 shadow-sm mb-4">
         <Card.Body className="p-3">
           <div className="mb-3">
@@ -327,6 +384,7 @@ const Dashboard = () => {
         </Card.Body>
       </Card>
 
+      {/* FILA 3: 3 DONAS */}
       <Row className="g-3 mb-4">
         <Col xs={12} md={4}>
           <Card className="border-0 shadow-sm h-100">
@@ -418,7 +476,6 @@ const Dashboard = () => {
                 </PieChart>
               </ResponsiveContainer>
 
-              {/* LEYENDA MANUAL */}
               <div className="mt-2">
                 {clientesPorPlan.map((plan) => (
                   <div key={plan.name} className="d-flex align-items-center justify-content-between small mb-1">
@@ -450,6 +507,91 @@ const Dashboard = () => {
         </Col>
       </Row>
 
+      {/* FILA 4: ALERTAS LATERALES */}
+      <Row className="g-3 mb-4">
+        {stats.pagosMes.pendientes > 0 && (
+          <Col xs={12} md={4}>
+            <Card className="border-0 shadow-sm h-100" style={{ background: '#fff3cd', borderLeft: '4px solid #ffc107' }}>
+              <Card.Body className="p-3">
+                <div className="d-flex justify-content-between align-items-start mb-2">
+                  <h6 className="fw-bold mb-0">⚠️ Atención Requerida</h6>
+                  <Badge bg="warning" text="dark">{stats.pagosMes.pendientes}</Badge>
+                </div>
+                <p className="small text-muted mb-2">
+                  Tienes {stats.pagosMes.pendientes} pago(s) pendiente(s) de verificar.
+                </p>
+                <Button as={Link} to="/admin/pagos-pendientes" variant="warning" size="sm" className="w-100">
+                  Revisar pagos
+                </Button>
+              </Card.Body>
+            </Card>
+          </Col>
+        )}
+
+        {stats.porVencer.length > 0 && (
+          <Col xs={12} md={4}>
+            <Card className="border-0 shadow-sm h-100" style={{ background: '#fff3e0', borderLeft: '4px solid #ff9800' }}>
+              <Card.Body className="p-3">
+                <div className="d-flex justify-content-between align-items-start mb-2">
+                  <h6 className="fw-bold mb-0">🔄 Por Vencer (5 días)</h6>
+                  <Badge bg="warning" text="dark">{stats.porVencer.length}</Badge>
+                </div>
+                <p className="small text-muted mb-2">
+                  {stats.porVencer.length} cliente(s) renuevan pronto.
+                </p>
+                <div style={{ maxHeight: '120px', overflowY: 'auto' }}>
+                  {stats.porVencer.map((r) => (
+                    <div key={r.id} className="d-flex justify-content-between align-items-center mb-1 small">
+                      <span className="text-truncate me-2">{r.clientes?.nombre}</span>
+                      <Button
+                        variant="outline-warning"
+                        size="sm"
+                        style={{ padding: '0 6px', fontSize: '0.7rem' }}
+                        onClick={() => enviarRecordatorio(r, 'por_vencer')}
+                      >
+                        📩
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </Card.Body>
+            </Card>
+          </Col>
+        )}
+
+        {stats.vencidos.length > 0 && (
+          <Col xs={12} md={4}>
+            <Card className="border-0 shadow-sm h-100" style={{ background: '#ffe6e6', borderLeft: '4px solid #f5576c' }}>
+              <Card.Body className="p-3">
+                <div className="d-flex justify-content-between align-items-start mb-2">
+                  <h6 className="fw-bold mb-0">⚠️ Vencidos sin Renovar</h6>
+                  <Badge bg="danger">{stats.vencidos.length}</Badge>
+                </div>
+                <p className="small text-muted mb-2">
+                  {stats.vencidos.length} cliente(s) no renovaron.
+                </p>
+                <div style={{ maxHeight: '120px', overflowY: 'auto' }}>
+                  {stats.vencidos.map((r) => (
+                    <div key={r.id} className="d-flex justify-content-between align-items-center mb-1 small">
+                      <span className="text-truncate me-2">{r.clientes?.nombre}</span>
+                      <Button
+                        variant="outline-danger"
+                        size="sm"
+                        style={{ padding: '0 6px', fontSize: '0.7rem' }}
+                        onClick={() => enviarRecordatorio(r, 'vencido')}
+                      >
+                        📩
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </Card.Body>
+            </Card>
+          </Col>
+        )}
+      </Row>
+
+      {/* FILA 5: ÚLTIMOS CLIENTES */}
       <Card className="border-0 shadow-sm">
         <Card.Body className="p-3">
           <div className="d-flex justify-content-between align-items-center mb-3">
