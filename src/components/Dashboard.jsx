@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { Row, Col, Card, Badge, Spinner, Table, Button } from 'react-bootstrap';
+import React, { useEffect, useState } from 'react';
+import { Row, Col, Card, Badge, Spinner, Table, Button, Modal, ProgressBar } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import {
   Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -54,9 +54,11 @@ const Dashboard = () => {
   const [ultimosClientes, setUltimosClientes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [esMovil, setEsMovil] = useState(false);
-  
-  // Para evitar doble envío en StrictMode
-  const autoEnvioEjecutado = useRef(false);
+
+  // Estados para envío
+  const [enviandoMasivo, setEnviandoMasivo] = useState(null);
+  const [progresoEnvio, setProgresoEnvio] = useState({ actual: 0, total: 0 });
+  const [mostrarModalEnvio, setMostrarModalEnvio] = useState(false);
 
   useEffect(() => {
     const checkMovil = () => setEsMovil(window.innerWidth < 768);
@@ -76,34 +78,30 @@ const Dashboard = () => {
     const hoyStr = hoy.toISOString().split('T')[0];
     const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString();
     
-    // Fechas de control
     const en5dias = new Date(hoy); en5dias.setDate(en5dias.getDate() + 5);
     const en5diasStr = en5dias.toISOString().split('T')[0];
     const hace30dias = new Date(hoy); hace30dias.setDate(hace30dias.getDate() - 30);
     const hace30diasStr = hace30dias.toISOString().split('T')[0];
 
-    // 1. Clientes y Pagos
     const { count: totalClientes } = await supabase.from('clientes').select('*', { count: 'exact', head: true }).eq('estado_pago', 'pagado');
     const { count: clientesMes } = await supabase.from('clientes').select('*', { count: 'exact', head: true }).eq('estado_pago', 'pagado').gte('created_at', primerDiaMes);
     const { data: pagosMes } = await supabase.from('clientes').select('pago_verificado').gte('created_at', primerDiaMes);
     const pagosConfirmados = (pagosMes || []).filter(p => p.pago_verificado).length;
     const pagosPendientes = (pagosMes || []).filter(p => !p.pago_verificado).length;
 
-    // 2. Rutinas
     const { data: rutinasMes } = await supabase.from('rutinas').select('estado').gte('created_at', primerDiaMes);
     const rutinasActivas = (rutinasMes || []).filter(r => r.estado === 'activa').length;
     const rutinasBorrador = (rutinasMes || []).filter(r => r.estado === 'borrador').length;
 
-    // 3. Renovación
     const { data: todosClientes } = await supabase.from('clientes').select('es_renovacion, nivel_experiencia, tipo_producto, created_at').eq('estado_pago', 'pagado');
     const totalRenovaciones = (todosClientes || []).filter(c => c.es_renovacion).length;
     const totalNuevos = (todosClientes || []).filter(c => !c.es_renovacion).length;
     const tasaRenovacion = totalNuevos > 0 ? ((totalRenovaciones / totalNuevos) * 100).toFixed(0) : 0;
 
-    // 4. Listas de Alerta (Por Vencer y Vencidos > 30 dias)
+    // CONSULTAS CORREGIDAS
     const { data: porVencerData } = await supabase
       .from('rutinas')
-      .select(`id, fecha_vencimiento, token, recordatorio_por_vencer_enviado, clientes:cliente_id (nombre, telefono, email)`)
+      .select('id, fecha_vencimiento, token, recordatorio_por_vencer_enviado, cliente_id')
       .gte('fecha_vencimiento', hoyStr)
       .lte('fecha_vencimiento', en5diasStr)
       .eq('estado', 'activa')
@@ -111,27 +109,42 @@ const Dashboard = () => {
 
     const { data: vencidosData } = await supabase
       .from('rutinas')
-      .select(`id, fecha_vencimiento, token, recordatorio_vencido_30d_enviado, clientes:cliente_id (nombre, telefono, email)`)
+      .select('id, fecha_vencimiento, token, recordatorio_vencido_30d_enviado, cliente_id')
       .lt('fecha_vencimiento', hoyStr)
       .eq('estado', 'activa')
       .order('fecha_vencimiento', { ascending: false });
 
-    // Filtrar los que cumplen la regla de negocio y no han sido notificados hoy
-    const porVencerFiltrados = (porVencerData || []).filter(r => {
+    // Obtener datos de clientes por separado
+    const clienteIds = [
+      ...(porVencerData || []).map(r => r.cliente_id),
+      ...(vencidosData || []).map(r => r.cliente_id)
+    ].filter(Boolean);
+
+    let clientesMap = {};
+    if (clienteIds.length > 0) {
+      const { data: clientesData } = await supabase
+        .from('clientes')
+        .select('id, nombre, telefono, email')
+        .in('id', [...new Set(clienteIds)]);
+      
+      (clientesData || []).forEach(c => { clientesMap[c.id] = c; });
+    }
+
+    const porVencerFiltrados = (porVencerData || []).map(r => {
       const env = r.recordatorio_por_vencer_enviado;
-      return !env || new Date(env).toISOString().split('T')[0] !== hoyStr;
+      const enviadoHoy = env && new Date(env).toISOString().split('T')[0] === hoyStr;
+      return { ...r, clientes: clientesMap[r.cliente_id], enviadoHoy };
     });
 
-    // Vencidos: Solo los que vencieron hace MÁS de 30 días
     const vencidosFiltrados = (vencidosData || []).filter(r => {
       const fechaVenc = new Date(r.fecha_vencimiento);
+      return fechaVenc <= hace30dias;
+    }).map(r => {
       const env = r.recordatorio_vencido_30d_enviado;
-      const cumple30dias = fechaVenc <= hace30dias;
-      const noNotificadoHoy = !env || new Date(env).toISOString().split('T')[0] !== hoyStr;
-      return cumple30dias && noNotificadoHoy;
+      const enviadoHoy = env && new Date(env).toISOString().split('T')[0] === hoyStr;
+      return { ...r, clientes: clientesMap[r.cliente_id], enviadoHoy };
     });
 
-    // 5. Gráficos y tabla
     const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     const datos12Meses = [];
     const fechaInicio = new Date(hoy.getFullYear(), hoy.getMonth() - 11, 1);
@@ -166,40 +179,43 @@ const Dashboard = () => {
     setClientesPorPlan(distribucionPlanes);
     setUltimosClientes(recientes || []);
     setCargando(false);
-
-    // AUTOMATIZACIÓN: Enviar mensajes si es la primera carga del día
-    if (!autoEnvioEjecutado.current) {
-      autoEnvioEjecutado.current = true;
-      ejecutarEnvioAutomatico(porVencerFiltrados, vencidosFiltrados, hoyStr);
-    }
   };
 
-  const ejecutarEnvioAutomatico = async (porVencer, vencidos, hoyStr) => {
-    // Función auxiliar para enviar con delay
-    const enviar = async (lista, tipo, campo) => {
-      for (let i = 0; i < lista.length; i++) {
-        const r = lista[i];
-        const cliente = r.clientes;
-        if (!cliente) continue;
+  const enviarMasivo = async (tipo) => {
+    const lista = tipo === 'por_vencer' ? stats.porVencer : stats.vencidos;
+    const pendientes = lista.filter(r => !r.enviadoHoy);
+    
+    if (pendientes.length === 0) {
+      alert('Todos los clientes de esta lista ya recibieron su mensaje hoy.');
+      return;
+    }
 
-        let mensaje = '';
-        if (tipo === 'por_vencer') {
-          mensaje = `¡Hola ${cliente.nombre}! 💪\n\nTu plan vence el ${new Date(r.fecha_vencimiento).toLocaleDateString('es-CL')}.\n\nRenueva directamente aquí: ${window.location.origin}/renovar/${r.token}\n\n¡Vamos con todo! 🔥`;
-        } else {
-          mensaje = `¡Hola ${cliente.nombre}! 👋\n\nHan pasado 30 días desde que venció tu plan.\n\n¿Quieres retomar? Escríbeme por aquí. 💪`;
-        }
+    setEnviandoMasivo(tipo);
+    setProgresoEnvio({ actual: 0, total: pendientes.length });
+    setMostrarModalEnvio(true);
 
-        const telefono = cliente.telefono.replace(/[^0-9]/g, '');
-        window.open(`https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`, '_blank');
+    const campo = tipo === 'por_vencer' ? 'recordatorio_por_vencer_enviado' : 'recordatorio_vencido_30d_enviado';
 
-        await supabase.from('rutinas').update({ [campo]: new Date().toISOString() }).eq('id', r.id);
-        
-        if (i < lista.length - 1) await new Promise(res => setTimeout(res, 2000));
-      }
-    };
+    for (let i = 0; i < pendientes.length; i++) {
+      const rutina = pendientes[i];
+      const cliente = rutina.clientes;
+      if (!cliente) continue;
 
-    if (porVencer.length > 0) await enviar(porVencer, 'por_vencer', 'recordatorio_por_vencer_enviado');
-    if (vencidos.length > 0) await enviar(vencidos, 'vencidos', 'recordatorio_vencido_30d_enviado');
+      const mensaje = tipo === 'por_vencer'
+        ? `¡Hola ${cliente.nombre}! 💪\n\nTu plan de entrenamiento vence el ${new Date(rutina.fecha_vencimiento).toLocaleDateString('es-CL')}.\n\nRenueva directamente aquí: ${window.location.origin}/renovar/${rutina.token}\n\n¡Vamos con todo! 🔥`
+        : `¡Hola ${cliente.nombre}! 👋\n\nHan pasado 30 días desde que venció tu plan.\n\n¿Quieres retomar? Escríbeme por aquí. 💪`;
+
+      const telefono = cliente.telefono.replace(/[^0-9]/g, '');
+      window.open(`https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`, '_blank');
+
+      await supabase.from('rutinas').update({ [campo]: new Date().toISOString() }).eq('id', rutina.id);
+      setProgresoEnvio({ actual: i + 1, total: pendientes.length });
+
+      if (i < pendientes.length - 1) await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+
+    setEnviandoMasivo(null);
+    setTimeout(() => { setMostrarModalEnvio(false); cargarTodo(); }, 1500);
   };
 
   if (cargando) {
@@ -258,10 +274,44 @@ const Dashboard = () => {
           <Col xs={12} md={4}><Card className="border-0 shadow-sm h-100" style={{ background: '#fff3cd', borderLeft: '4px solid #ffc107' }}><Card.Body className="p-3"><h6 className="fw-bold mb-2">⚠️ Atención Requerida</h6><p className="small text-muted mb-2">Tienes {stats.pagosMes.pendientes} pago(s) por verificar.</p><Button as={Link} to="/admin/pagos-pendientes" variant="warning" size="sm" className="w-100">Revisar pagos</Button></Card.Body></Card></Col>
         )}
         {stats.porVencer.length > 0 && (
-          <Col xs={12} md={4}><Card className="border-0 shadow-sm h-100" style={{ background: '#fff3e0', borderLeft: '4px solid #ff9800' }}><Card.Body className="p-3"><div className="d-flex justify-content-between mb-2"><h6 className="fw-bold mb-0">🔄 Por Vencer</h6><Badge bg="warning" text="dark">{stats.porVencer.length}</Badge></div><div style={{ maxHeight: '120px', overflowY: 'auto' }}>{stats.porVencer.map(r => <div key={r.id} className="d-flex justify-content-between small mb-1"><span className="text-truncate">{r.clientes?.nombre}</span><Badge bg="success">✅ Enviado</Badge></div>)}</div></Card.Body></Card></Col>
+          <Col xs={12} md={4}>
+            <Card className="border-0 shadow-sm h-100" style={{ background: '#fff3e0', borderLeft: '4px solid #ff9800' }}>
+              <Card.Body className="p-3">
+                <div className="d-flex justify-content-between mb-2"><h6 className="fw-bold mb-0">🔄 Por Vencer</h6><Badge bg="warning" text="dark">{stats.porVencer.length}</Badge></div>
+                <div style={{ maxHeight: '120px', overflowY: 'auto', marginBottom: '8px' }}>
+                  {stats.porVencer.map(r => (
+                    <div key={r.id} className="d-flex justify-content-between small mb-1">
+                      <span className="text-truncate me-2">{r.clientes?.nombre}</span>
+                      {r.enviadoHoy ? <Badge bg="success">✅</Badge> : <Badge bg="secondary">Pendiente</Badge>}
+                    </div>
+                  ))}
+                </div>
+                <Button variant="warning" size="sm" className="w-100" onClick={() => enviarMasivo('por_vencer')} disabled={enviandoMasivo !== null}>
+                  📩 Enviar recordatorios de hoy
+                </Button>
+              </Card.Body>
+            </Card>
+          </Col>
         )}
         {stats.vencidos.length > 0 && (
-          <Col xs={12} md={4}><Card className="border-0 shadow-sm h-100" style={{ background: '#ffe6e6', borderLeft: '4px solid #f5576c' }}><Card.Body className="p-3"><div className="d-flex justify-content-between mb-2"><h6 className="fw-bold mb-0">⚠️ Vencidos +30d</h6><Badge bg="danger">{stats.vencidos.length}</Badge></div><div style={{ maxHeight: '120px', overflowY: 'auto' }}>{stats.vencidos.map(r => <div key={r.id} className="d-flex justify-content-between small mb-1"><span className="text-truncate">{r.clientes?.nombre}</span><Badge bg="success">✅ Enviado</Badge></div>)}</div></Card.Body></Card></Col>
+          <Col xs={12} md={4}>
+            <Card className="border-0 shadow-sm h-100" style={{ background: '#ffe6e6', borderLeft: '4px solid #f5576c' }}>
+              <Card.Body className="p-3">
+                <div className="d-flex justify-content-between mb-2"><h6 className="fw-bold mb-0">⚠️ Vencidos +30d</h6><Badge bg="danger">{stats.vencidos.length}</Badge></div>
+                <div style={{ maxHeight: '120px', overflowY: 'auto', marginBottom: '8px' }}>
+                  {stats.vencidos.map(r => (
+                    <div key={r.id} className="d-flex justify-content-between small mb-1">
+                      <span className="text-truncate me-2">{r.clientes?.nombre}</span>
+                      {r.enviadoHoy ? <Badge bg="success">✅</Badge> : <Badge bg="secondary">Pendiente</Badge>}
+                    </div>
+                  ))}
+                </div>
+                <Button variant="danger" size="sm" className="w-100" onClick={() => enviarMasivo('vencidos')} disabled={enviandoMasivo !== null}>
+                  📩 Enviar campaña de recuperación
+                </Button>
+              </Card.Body>
+            </Card>
+          </Col>
         )}
       </Row>
 
@@ -276,6 +326,16 @@ const Dashboard = () => {
           )}
         </Card.Body>
       </Card>
+
+      {/* Modal de Envío Masivo */}
+      <Modal show={mostrarModalEnvio} onHide={() => {}} backdrop="static" keyboard={false} centered>
+        <Modal.Header className="bg-warning text-dark"><Modal.Title>📩 Enviando mensajes...</Modal.Title></Modal.Header>
+        <Modal.Body className="text-center p-4">
+          <h4 className="fw-bold mb-3">Enviando {progresoEnvio.actual} de {progresoEnvio.total}</h4>
+          <ProgressBar now={progresoEnvio.total > 0 ? (progresoEnvio.actual / progresoEnvio.total) * 100 : 0} animated variant="warning" style={{ height: '20px' }} />
+          <p className="text-muted small mt-3 mb-0">Por favor, no cierres esta ventana hasta que termine.</p>
+        </Modal.Body>
+      </Modal>
     </>
   );
 };
