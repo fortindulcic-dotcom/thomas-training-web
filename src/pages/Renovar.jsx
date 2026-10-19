@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Container, Row, Col, Card, Button, Alert, Spinner, Form, Badge } from 'react-bootstrap';
 import { supabase } from '../utils/supabase';
+import { generarRutina } from '../utils/generadorRutinas'; // Importamos el generador
 
 const Renovar = () => {
   const { token } = useParams();
@@ -38,13 +39,6 @@ const Renovar = () => {
       return;
     }
 
-    // Verificar si ya expiró (opcional)
-    if (rutinaData.fecha_vencimiento) {
-      const hoy = new Date();
-      const vencimiento = new Date(rutinaData.fecha_vencimiento);
-      // Permitimos renovar incluso si ya venció, pero mostramos info
-    }
-
     // Cargar cliente
     const { data: clienteData } = await supabase
       .from('clientes')
@@ -54,7 +48,6 @@ const Renovar = () => {
 
     setRutina(rutinaData);
     setCliente(clienteData);
-    // Precargar el peso actual del cliente si existe
     if (clienteData?.peso) {
       setPeso(clienteData.peso);
     }
@@ -64,13 +57,15 @@ const Renovar = () => {
   const guardarMetricas = async (e) => {
     e.preventDefault();
     setGuardando(true);
+    setError(null);
 
+    // 1. Guardar las nuevas métricas en el cliente
     const medidas = {};
     if (cintura) medidas.cintura = parseFloat(cintura);
     if (pecho) medidas.pecho = parseFloat(pecho);
     if (brazo) medidas.brazo = parseFloat(brazo);
 
-    const { error } = await supabase
+    const { error: errorCliente } = await supabase
       .from('clientes')
       .update({
         peso_actual: parseFloat(peso),
@@ -80,8 +75,82 @@ const Renovar = () => {
       })
       .eq('id', cliente.id);
 
-    if (error) {
-      alert('Error al guardar: ' + error.message);
+    if (errorCliente) {
+      alert('Error al guardar métricas: ' + errorCliente.message);
+      setGuardando(false);
+      return;
+    }
+
+    // 2. Obtener los ejercicios de la rutina anterior
+    const { data: ejerciciosAnteriores, error: errorEjercicios } = await supabase
+      .from('ejercicios')
+      .select('*')
+      .eq('rutina_id', rutina.id)
+      .order('orden', { ascending: true });
+
+    if (errorEjercicios || !ejerciciosAnteriores) {
+      alert('Error al cargar la rutina anterior: ' + errorEjercicios?.message);
+      setGuardando(false);
+      return;
+    }
+
+    // 3. Generar la nueva rutina (basada en los datos del cliente)
+    // Usamos la función generarRutina con los datos actualizados
+    const nuevaRutinaGenerada = generarRutina({
+      ...cliente,
+      peso: parseFloat(peso), // Actualizamos el peso para el cálculo del IMC si es necesario
+      // Nota: La función original no usa el peso para generar ejercicios, pero lo mantenemos por consistencia
+    });
+
+    // 4. Crear la nueva rutina en Supabase
+    const { data: rutinaData, error: errorRutina } = await supabase
+      .from('rutinas')
+      .insert([{
+        cliente_id: cliente.id,
+        nombre: `Renovación: ${cliente.nombre}`,
+        activa: false,
+        estado: 'borrador',
+        rutina_anterior_id: rutina.id,
+        fecha_inicio: new Date().toISOString().split('T')[0]
+      }])
+      .select();
+
+    if (errorRutina) {
+      alert('Error al crear la nueva rutina: ' + errorRutina.message);
+      setGuardando(false);
+      return;
+    }
+
+    const nuevaRutinaId = rutinaData[0].id;
+
+    // 5. Preparar los ejercicios para insertar
+    // Mapeamos los ejercicios generados y les asignamos el ID de la nueva rutina.
+    // IMPORTANTE: Mantenemos los mismos días y ejercicios de la rutina anterior, 
+    // pero podríamos haber generado nuevos. Para este flujo, usaremos los de la rutina anterior
+    // para respetar el progreso del cliente, pero actualizaremos los pesos.
+    
+    const ejerciciosConNuevaRutina = ejerciciosAnteriores.map(ej => ({
+      rutina_id: nuevaRutinaId,
+      dia_semana: ej.dia_semana,
+      nombre: ej.nombre,
+      grupo_muscular: ej.grupo_muscular,
+      series: ej.series,
+      repeticiones: ej.repeticiones,
+      peso_sugerido: ej.peso_sugerido, // Mantenemos el peso anterior
+      notas: ej.notas,
+      orden: ej.orden
+    }));
+
+    // Si prefieres que el generador haga una rutina nueva desde cero (con ejercicios distintos),
+    // puedes usar `nuevaRutinaGenerada` en lugar de `ejerciciosAnteriores`.
+    // Pero como queremos respetar el progreso, usamos los anteriores.
+
+    const { error: errorInsertEjercicios } = await supabase
+      .from('ejercicios')
+      .insert(ejerciciosConNuevaRutina);
+
+    if (errorInsertEjercicios) {
+      alert('Error al guardar los ejercicios: ' + errorInsertEjercicios.message);
       setGuardando(false);
       return;
     }
@@ -217,7 +286,7 @@ const Renovar = () => {
                       className="w-100"
                       disabled={guardando}
                     >
-                      {guardando ? 'Guardando...' : 'Continuar al pago'}
+                      {guardando ? 'Generando nueva rutina...' : 'Continuar al pago'}
                     </Button>
                   </Form>
                 </Card.Body>
@@ -231,13 +300,13 @@ const Renovar = () => {
                 <div style={{ fontSize: '4rem' }}>🎉</div>
                 <h2 className="text-success mb-3">¡Métricas guardadas!</h2>
                 <p className="lead">
-                  Para activar tu nueva rutina, completa el pago del <strong>Plan {cliente.nivel_experiencia}</strong>.
+                  Hemos generado tu nueva rutina. Para activarla, completa el pago del <strong>Plan {cliente.nivel_experiencia}</strong>.
                 </p>
                 <Alert variant="info" className="text-start mt-4">
                   <h6 className="fw-bold">📋 Últimos pasos:</h6>
                   <ol className="mb-0">
                     <li>Completa el pago en Webpay.</li>
-                    <li>Thomas revisará tus nuevas métricas y generará tu rutina actualizada.</li>
+                    <li>Thomas revisará tu nueva rutina y la activará.</li>
                     <li>Recibirás tu nuevo plan por WhatsApp.</li>
                   </ol>
                 </Alert>
