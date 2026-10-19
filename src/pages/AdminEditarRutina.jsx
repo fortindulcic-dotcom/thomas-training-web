@@ -155,7 +155,6 @@ const AdminEditarRutina = () => {
     cargarRutina();
   };
 
-  // Normalizar el teléfono antes de generar el link de WhatsApp
   const normalizarTelefono = (tel) => {
     if (!tel) return '';
     let limpio = tel.replace(/[^0-9+]/g, '');
@@ -174,7 +173,7 @@ const AdminEditarRutina = () => {
   };
 
   const aprobarRutina = async () => {
-    if (!window.confirm('¿Aprobar esta rutina? Se generará un link único y se abrirá WhatsApp para enviárselo al cliente.')) return;
+    if (!window.confirm('¿Aprobar esta rutina? Se generará un link único y estará listo para enviar por WhatsApp.')) return;
 
     setGuardando(true);
     setMensaje(null);
@@ -212,6 +211,14 @@ const AdminEditarRutina = () => {
     const fechaVencimiento = new Date(hoy);
     fechaVencimiento.setDate(fechaVencimiento.getDate() + 30);
 
+    // ARCHIVAR RUTINA ANTERIOR SI ES RENOVACIÓN
+    if (rutina.rutina_anterior_id) {
+      await supabase
+        .from('rutinas')
+        .update({ estado: 'archivada', activa: false })
+        .eq('id', rutina.rutina_anterior_id);
+    }
+
     const { error } = await supabase
       .from('rutinas')
       .update({
@@ -244,14 +251,9 @@ const AdminEditarRutina = () => {
     );
 
     const telefono = normalizarTelefono(cliente.telefono);
-    const urlWA = `https://wa.me/${telefono}?text=${mensajeWhatsApp}`;
-    setUrlWhatsApp(urlWA);
+    setUrlWhatsApp(`https://wa.me/${telefono}?text=${mensajeWhatsApp}`);
 
-    const ventanaWhatsApp = window.open(urlWA, '_blank');
-    if (!ventanaWhatsApp) {
-      console.warn('El navegador bloqueó la ventana de WhatsApp. Usa el botón del modal.');
-    }
-
+    // Ya NO abrimos window.open aquí. Solo mostramos el modal.
     setMostrarModalLink(true);
     setGuardando(false);
     cargarRutina();
@@ -435,30 +437,31 @@ const AdminEditarRutina = () => {
 
       <Modal show={mostrarModalLink} onHide={() => setMostrarModalLink(false)} centered>
         <Modal.Header closeButton className="bg-success text-white">
-          <Modal.Title>🎉 ¡Rutina aprobada y enviada!</Modal.Title>
+          <Modal.Title>🎉 ¡Rutina aprobada!</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <p>La rutina de <strong>{cliente.nombre}</strong> está activa.</p>
-          <p className="mb-2">Link público para el cliente:</p>
+          <p className="mb-2">Haz clic en el botón verde para enviar el link al cliente por WhatsApp:</p>
+          
+          <Button
+            variant="success"
+            size="lg"
+            className="w-100 mb-3"
+            href={urlWhatsApp}
+            target="_blank"
+            rel="noreferrer"
+          >
+            💬 Enviar por WhatsApp
+          </Button>
+
+          <p className="small text-muted mb-2">O copia el link manualmente:</p>
           <InputGroup className="mb-3">
             <Form.Control value={linkGenerado} readOnly />
             <Button variant="primary" onClick={copiarLink}>📋 Copiar</Button>
           </InputGroup>
 
           <Button
-            variant="success"
-            size="lg"
-            className="w-100 mb-2"
-            href={urlWhatsApp}
-            target="_blank"
-            rel="noreferrer"
-          >
-            💬 Abrir WhatsApp y enviar
-          </Button>
-
-          <Button
             variant="outline-secondary"
-            size="lg"
             className="w-100"
             onClick={volverALista}
           >

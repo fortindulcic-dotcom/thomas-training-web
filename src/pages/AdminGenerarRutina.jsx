@@ -14,7 +14,6 @@ const AdminGenerarRutina = () => {
   const cargarRutinas = async () => {
     setCargando(true);
     
-    // Consultamos las RUTINAS y hacemos JOIN con CLIENTES
     const { data, error } = await supabase
       .from('rutinas')
       .select(`
@@ -28,6 +27,7 @@ const AdminGenerarRutina = () => {
           objetivo
         )
       `)
+      .neq('estado', 'archivada') // <-- Filtro clave
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -58,7 +58,7 @@ const AdminGenerarRutina = () => {
         <div>
           <h4 className="fw-bold mb-1">📝 Gestión de Rutinas</h4>
           <p className="text-muted mb-0 small">
-            Aquí aparecen todas las rutinas generadas (iniciales y renovaciones).
+            Aquí aparecen todas las rutinas vigentes (iniciales y renovaciones).
           </p>
         </div>
         <Badge bg="primary" className="p-2">
@@ -70,15 +70,13 @@ const AdminGenerarRutina = () => {
 
       {rutinas.length === 0 ? (
         <Alert variant="info">
-          Aún no hay rutinas generadas.
+          Aún no hay rutinas vigentes.
         </Alert>
       ) : esMovil ? (
-        // ===== VISTA MÓVIL: TARJETAS =====
         <div className="d-flex flex-column gap-2">
           {rutinas.map((r) => {
             const cliente = r.clientes;
-            // Si la rutina no tiene cliente asociado, la saltamos
-            if (!cliente) return null; 
+            if (!cliente) return null;
             
             return (
               <Card key={r.id} className="border-0 shadow-sm">
@@ -92,11 +90,10 @@ const AdminGenerarRutina = () => {
                     </div>
                     {r.estado === 'borrador' && <Badge bg="warning" text="dark">📝 Borrador</Badge>}
                     {r.estado === 'activa' && <Badge bg="success">✅ Activa</Badge>}
-                    {r.estado === 'vencida' && <Badge bg="danger">❌ Vencida</Badge>}
                   </div>
                   
                   <div className="mb-3">
-                    <small className="text-muted d-block">Nombre de la rutina:</small>
+                    <small className="text-muted d-block">Rutina:</small>
                     <strong>{r.nombre}</strong>
                   </div>
 
@@ -119,7 +116,6 @@ const AdminGenerarRutina = () => {
           })}
         </div>
       ) : (
-        // ===== VISTA DESKTOP: TABLA =====
         <div className="bg-white rounded shadow-sm">
           <Table hover responsive className="mb-0">
             <thead className="bg-light">
@@ -162,7 +158,6 @@ const AdminGenerarRutina = () => {
                     <td>
                       {r.estado === 'borrador' && <Badge bg="warning" text="dark">📝 Borrador</Badge>}
                       {r.estado === 'activa' && <Badge bg="success">✅ Activa</Badge>}
-                      {r.estado === 'vencida' && <Badge bg="danger">❌ Vencida</Badge>}
                     </td>
                     <td>
                       <Button

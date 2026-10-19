@@ -90,7 +90,7 @@ const Admin = () => {
           <span className="me-2">💰</span> Confirmar Pagos
         </Nav.Link>
         <Nav.Link as={Link} to="/admin/generar-rutina" onClick={() => setMenuAbierto(false)} className={`text-white mb-2 px-3 py-2 rounded ${esRutinas ? 'bg-primary' : ''}`}>
-          <span className="me-2">📝</span> Nueva Rutina
+          <span className="me-2">📝</span> Gestión de Rutinas
         </Nav.Link>
         <Nav.Link as={Link} to="/admin/precios" onClick={() => setMenuAbierto(false)} className={`text-white mb-2 px-3 py-2 rounded ${esPrecios ? 'bg-primary' : ''}`}>
           <span className="me-2">💵</span> Configurar Precios
