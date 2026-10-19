@@ -33,7 +33,7 @@ function App() {
           <Route path="/evaluacion" element={<Evaluacion />} />
           <Route path="/admision" element={<Admision />} />
           <Route path="/r/:token" element={<MiRutina />} />
-          <Route path="rutina/:rutinaId" element={<AdminEditarRutina />} />
+          
           <Route path="/renovar/:token" element={<Renovar />} />
 
           {/* Rutas del panel de administración */}
@@ -42,6 +42,7 @@ function App() {
             <Route path="generar-rutina" element={<AdminGenerarRutina />} />
             <Route path="pagos-pendientes" element={<AdminPagosPendientes />} />
             <Route path="clientes" element={<AdminClientes />} />
+            <Route path="rutina/:rutinaId" element={<AdminEditarRutina />} />
             <Route path="rutina/:rutinaId" element={<AdminEditarRutina />} />
           </Route>
           
