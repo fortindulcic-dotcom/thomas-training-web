@@ -18,6 +18,7 @@ import Admision from './pages/Admision';
 import AdminClientes from './pages/AdminClientes';
 import MiRutina from './pages/MiRutina';
 import AdminEditarRutina from './pages/AdminEditarRutina';
+import Renovar from './pages/Renovar';
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
           <Route path="/admision" element={<Admision />} />
           <Route path="/r/:token" element={<MiRutina />} />
           <Route path="rutina/:rutinaId" element={<AdminEditarRutina />} />
+          <Route path="/renovar/:token" element={<Renovar />} />
 
           {/* Rutas del panel de administración */}
           <Route path="/admin" element={<Admin />}>
