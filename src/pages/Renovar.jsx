@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Container, Row, Col, Card, Button, Alert, Spinner, Form, Badge } from 'react-bootstrap';
 import { supabase } from '../utils/supabase';
-import { generarRutina } from '../utils/generadorRutinas'; // Importamos el generador
+import { generarRutina } from '../utils/generadorRutinas';
 
 const Renovar = () => {
   const { token } = useParams();
@@ -10,7 +10,7 @@ const Renovar = () => {
   const [rutina, setRutina] = useState(null);
   const [cliente, setCliente] = useState(null);
   const [error, setError] = useState(null);
-  const [paso, setPaso] = useState(1); // 1: métricas, 2: pago
+  const [paso, setPaso] = useState(1);
   const [peso, setPeso] = useState('');
   const [cintura, setCintura] = useState('');
   const [pecho, setPecho] = useState('');
@@ -26,7 +26,6 @@ const Renovar = () => {
     setCargando(true);
     setError(null);
 
-    // Buscar la rutina por token
     const { data: rutinaData, error: errorRutina } = await supabase
       .from('rutinas')
       .select('*')
@@ -39,7 +38,6 @@ const Renovar = () => {
       return;
     }
 
-    // Cargar cliente
     const { data: clienteData } = await supabase
       .from('clientes')
       .select('*')
@@ -88,21 +86,13 @@ const Renovar = () => {
       .eq('rutina_id', rutina.id)
       .order('orden', { ascending: true });
 
-    if (errorEjercicios || !ejerciciosAnteriores) {
-      alert('Error al cargar la rutina anterior: ' + errorEjercicios?.message);
+    if (errorEjercicios) {
+      alert('Error al cargar la rutina anterior: ' + errorEjercicios.message);
       setGuardando(false);
       return;
     }
 
-    // 3. Generar la nueva rutina (basada en los datos del cliente)
-    // Usamos la función generarRutina con los datos actualizados
-    const nuevaRutinaGenerada = generarRutina({
-      ...cliente,
-      peso: parseFloat(peso), // Actualizamos el peso para el cálculo del IMC si es necesario
-      // Nota: La función original no usa el peso para generar ejercicios, pero lo mantenemos por consistencia
-    });
-
-    // 4. Crear la nueva rutina en Supabase
+    // 3. Crear la nueva rutina en Supabase
     const { data: rutinaData, error: errorRutina } = await supabase
       .from('rutinas')
       .insert([{
@@ -123,12 +113,7 @@ const Renovar = () => {
 
     const nuevaRutinaId = rutinaData[0].id;
 
-    // 5. Preparar los ejercicios para insertar
-    // Mapeamos los ejercicios generados y les asignamos el ID de la nueva rutina.
-    // IMPORTANTE: Mantenemos los mismos días y ejercicios de la rutina anterior, 
-    // pero podríamos haber generado nuevos. Para este flujo, usaremos los de la rutina anterior
-    // para respetar el progreso del cliente, pero actualizaremos los pesos.
-    
+    // 4. Copiar los ejercicios de la rutina anterior a la nueva
     const ejerciciosConNuevaRutina = ejerciciosAnteriores.map(ej => ({
       rutina_id: nuevaRutinaId,
       dia_semana: ej.dia_semana,
@@ -136,21 +121,17 @@ const Renovar = () => {
       grupo_muscular: ej.grupo_muscular,
       series: ej.series,
       repeticiones: ej.repeticiones,
-      peso_sugerido: ej.peso_sugerido, // Mantenemos el peso anterior
+      peso_sugerido: ej.peso_sugerido,
       notas: ej.notas,
       orden: ej.orden
     }));
-
-    // Si prefieres que el generador haga una rutina nueva desde cero (con ejercicios distintos),
-    // puedes usar `nuevaRutinaGenerada` en lugar de `ejerciciosAnteriores`.
-    // Pero como queremos respetar el progreso, usamos los anteriores.
 
     const { error: errorInsertEjercicios } = await supabase
       .from('ejercicios')
       .insert(ejerciciosConNuevaRutina);
 
     if (errorInsertEjercicios) {
-      alert('Error al guardar los ejercicios: ' + errorInsertEjercicios.message);
+      alert('Error al guardar los ejercicios de la nueva rutina: ' + errorInsertEjercicios.message);
       setGuardando(false);
       return;
     }
