@@ -16,11 +16,24 @@ const MyNavbar = () => {
         </BsNavbar.Brand>
         <BsNavbar.Toggle aria-controls="basic-navbar-nav" />
         <BsNavbar.Collapse id="basic-navbar-nav">
+          {/* Menú de la izquierda para clientes */}
           <Nav className="me-auto">
             <Nav.Link as={Link} to="/">Inicio</Nav.Link>
             <Nav.Link as={Link} to="/nosotros">Nosotros</Nav.Link>
             <Nav.Link as={Link} to="/contacto">Contacto</Nav.Link>
             <Nav.Link as={Link} to="/evaluacion">Evaluación</Nav.Link>
+          </Nav>
+
+          {/* Menú de la derecha exclusivo para Thomas */}
+          <Nav>
+            <Nav.Link 
+              as={Link} 
+              to="/admin" 
+              className="text-secondary opacity-75"
+              title="Acceso Thomas"
+            >
+              Admin 🔒
+            </Nav.Link>
           </Nav>
         </BsNavbar.Collapse>
       </Container>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Row, Col, Card, Badge, Spinner, Table, Button, Modal, ProgressBar } from 'react-bootstrap';
+import { Row, Col, Card, Badge, Spinner, Table, Button } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import {
   Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -56,11 +56,6 @@ const Dashboard = () => {
   const [cargando, setCargando] = useState(true);
   const [esMovil, setEsMovil] = useState(false);
 
-  // Estados para envío
-  const [enviandoMasivo, setEnviandoMasivo] = useState(null);
-  const [progresoEnvio, setProgresoEnvio] = useState({ actual: 0, total: 0 });
-  const [mostrarModalEnvio, setMostrarModalEnvio] = useState(false);
-
   useEffect(() => {
     const checkMovil = () => setEsMovil(window.innerWidth < 768);
     checkMovil();
@@ -76,56 +71,55 @@ const Dashboard = () => {
   const cargarTodo = async () => {
     setCargando(true);
     const hoy = new Date();
-    const hoyStr = hoy.toISOString().split('T')[0];
-    const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString();
-    const ultimoDiaMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0, 23, 59, 59).toISOString();
     
+    // Fechas exactas
+    const primerDiaMesStr = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-01`;
+    const ultimoDiaMesObj = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+    const ultimoDiaMesStr = `${ultimoDiaMesObj.getFullYear()}-${String(ultimoDiaMesObj.getMonth() + 1).padStart(2, '0')}-${String(ultimoDiaMesObj.getDate()).padStart(2, '0')}`;
+    
+    const hoyStr = hoy.toISOString().split('T')[0];
     const en5dias = new Date(hoy); en5dias.setDate(en5dias.getDate() + 5);
     const en5diasStr = en5dias.toISOString().split('T')[0];
     const hace30dias = new Date(hoy); hace30dias.setDate(hace30dias.getDate() - 30);
     const hace30diasStr = hace30dias.toISOString().split('T')[0];
 
-    // 1. Clientes
-    const { count: totalClientes } = await supabase.from('clientes').select('*', { count: 'exact', head: true }).eq('estado_pago', 'pagado');
-    const { count: clientesMes } = await supabase.from('clientes').select('*', { count: 'exact', head: true }).eq('estado_pago', 'pagado').gte('created_at', primerDiaMes);
-    
-    // 2. Pagos
-    const { data: pagosMes } = await supabase.from('clientes').select('pago_verificado').gte('created_at', primerDiaMes);
-    const pagosConfirmados = (pagosMes || []).filter(p => p.pago_verificado).length;
-    const pagosPendientes = (pagosMes || []).filter(p => !p.pago_verificado).length;
+    // 1. Traer todos los clientes y rutinas
+    const { data: todosClientes } = await supabase.from('clientes').select('*');
+    const { data: todasRutinas } = await supabase.from('rutinas').select('*');
 
-    // 3. Rutinas
-    const { data: rutinasMes } = await supabase.from('rutinas').select('estado').gte('created_at', primerDiaMes);
-    const rutinasActivas = (rutinasMes || []).filter(r => r.estado === 'activa').length;
-    const rutinasBorrador = (rutinasMes || []).filter(r => r.estado === 'borrador').length;
+    // 2. PAGOS (Contamos TODOS los clientes de la base de datos para las pruebas)
+    const pagosConfirmados = (todosClientes || []).filter(p => p.pago_verificado).length;
+    const pagosPendientes = (todosClientes || []).filter(p => !p.pago_verificado).length;
+    const totalPagos = (todosClientes || []).length;
 
-    // 4. Renovaciones (Nueva lógica)
-    const { data: renovacionesMes } = await supabase
-      .from('clientes')
-      .select('estado_pago, pago_verificado')
-      .gte('fecha_vencimiento', primerDiaMes.split('T')[0])
-      .lte('fecha_vencimiento', ultimoDiaMes.split('T')[0]);
-    
-    const totalARenovar = (renovacionesMes || []).length;
-    // Cuenta como renovada si pagó, sin importar si el pago está confirmado aún o la rutina aprobada
-    const renovadas = (renovacionesMes || []).filter(c => c.estado_pago === 'pagado' || c.estado_pago === 'pendiente').length;
+    // 3. RENOVACIONES (15 exactas, usando la lógica que ya te funcionó)
+    const renovacionesData = (todosClientes || []).filter(c => {
+      if (!c.fecha_vencimiento || c.es_renovacion !== true) return false;
+      const fecha = c.fecha_vencimiento.substring(0, 10);
+      return fecha >= primerDiaMesStr && fecha <= ultimoDiaMesStr;
+    });
+
+    const totalARenovar = renovacionesData.length;
+    const renovadas = renovacionesData.filter(c => c.estado_pago === 'pagado' || c.estado_pago === 'pendiente').length;
     const noRenovadas = totalARenovar - renovadas;
 
-    // 5. Por Vencer y Vencidos
-    const { data: porVencerData } = await supabase
-      .from('rutinas')
-      .select('id, fecha_vencimiento, token, recordatorio_por_vencer_enviado, cliente_id')
-      .gte('fecha_vencimiento', hoyStr)
-      .lte('fecha_vencimiento', en5diasStr)
-      .eq('estado', 'activa')
-      .order('fecha_vencimiento', { ascending: true });
+    // 4. Rutinas del Mes (Usando el mismo filtro de texto)
+    const rutinasMes = (todasRutinas || []).filter(r => {
+      if (!r.created_at) return false;
+      const fecha = r.created_at.substring(0, 10);
+      return fecha >= primerDiaMesStr && fecha <= ultimoDiaMesStr;
+    });
+    const rutinasActivas = rutinasMes.filter(r => r.estado === 'activa').length;
+    const rutinasBorrador = rutinasMes.filter(r => r.estado === 'borrador').length;
 
-    const { data: vencidosData } = await supabase
-      .from('rutinas')
-      .select('id, fecha_vencimiento, token, recordatorio_vencido_30d_enviado, cliente_id')
-      .lt('fecha_vencimiento', hace30diasStr)
-      .eq('estado', 'activa')
-      .order('fecha_vencimiento', { ascending: false });
+    // 5. Por Vencer y Vencidos
+    const porVencerData = (todasRutinas || []).filter(r => 
+      r.estado === 'activa' && r.fecha_vencimiento >= hoyStr && r.fecha_vencimiento <= en5diasStr
+    );
+
+    const vencidosData = (todasRutinas || []).filter(r => 
+      r.estado === 'activa' && r.fecha_vencimiento < hace30diasStr
+    );
 
     const clienteIds = [
       ...(porVencerData || []).map(r => r.cliente_id),
@@ -136,41 +130,29 @@ const Dashboard = () => {
     if (clienteIds.length > 0) {
       const { data: clientesData } = await supabase
         .from('clientes')
-        .select('id, nombre, telefono, email')
+        .select('id, nombre')
         .in('id', [...new Set(clienteIds)]);
-      
       (clientesData || []).forEach(c => { clientesMap[c.id] = c; });
     }
 
-    const porVencerFiltrados = (porVencerData || []).map(r => {
-      const env = r.recordatorio_por_vencer_enviado;
-      const enviadoHoy = env && new Date(env).toISOString().split('T')[0] === hoyStr;
-      return { ...r, clientes: clientesMap[r.cliente_id], enviadoHoy };
-    });
-
-    const vencidosFiltrados = (vencidosData || []).map(r => {
-      const env = r.recordatorio_vencido_30d_enviado;
-      const enviadoHoy = env && new Date(env).toISOString().split('T')[0] === hoyStr;
-      return { ...r, clientes: clientesMap[r.cliente_id], enviadoHoy };
-    });
+    const porVencerFiltrados = (porVencerData || []).map(r => ({ ...r, clientes: clientesMap[r.cliente_id] }));
+    const vencidosFiltrados = (vencidosData || []).map(r => ({ ...r, clientes: clientesMap[r.cliente_id] }));
 
     // 6. Tendencia
-    const { data: todosClientes } = await supabase.from('clientes').select('nivel_experiencia, tipo_producto, created_at').eq('estado_pago', 'pagado');
     const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     const datos12Meses = [];
     const fechaInicio = new Date(hoy.getFullYear(), hoy.getMonth() - 11, 1);
     for (let i = 0; i < 12; i++) {
       const fecha = new Date(fechaInicio.getFullYear(), fechaInicio.getMonth() + i, 1);
-      const finMes = new Date(fecha.getFullYear(), fecha.getMonth() + 1, 0, 23, 59, 59);
-      const clientesMesCount = (todosClientes || []).filter(c => {
-        const f = new Date(c.created_at);
-        return f >= fecha && f <= finMes;
+      const mesStr = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+      const clientesMesCountTrend = (todosClientes || []).filter(c => {
+        return c.created_at && c.created_at.substring(0, 7) === mesStr;
       }).length;
-      datos12Meses.push({ mes: meses[fecha.getMonth()], año: fecha.getFullYear(), clientes: clientesMesCount, etiqueta: `${meses[fecha.getMonth()]} ${String(fecha.getFullYear()).slice(-2)}` });
+      datos12Meses.push({ mes: meses[fecha.getMonth()], año: fecha.getFullYear(), clientes: clientesMesCountTrend, etiqueta: `${meses[fecha.getMonth()]} ${String(fecha.getFullYear()).slice(-2)}` });
     }
     const datosConTendencia = calcularTendencia(datos12Meses);
 
-    // 7. Clientes por Plan (con porcentaje)
+    // 7. Clientes por Plan
     const planesCount = {};
     (todosClientes || []).forEach(c => {
       const plan = c.tipo_producto === 'rutina_prediseñada' ? 'Rutinas Prediseñadas' : c.nivel_experiencia;
@@ -183,12 +165,13 @@ const Dashboard = () => {
       return { name: plan, value: cant, percentage: pct };
     });
 
-    const { data: recientes } = await supabase.from('clientes').select('*').eq('estado_pago', 'pagado').order('created_at', { ascending: false }).limit(6);
+    const recientes = (todosClientes || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 6);
 
     setStats({
-      clientesTotales: totalClientes || 0, clientesMes: clientesMes || 0,
-      pagosMes: { total: (pagosMes || []).length, confirmados: pagosConfirmados, pendientes: pagosPendientes },
-      rutinasMes: { total: (rutinasMes || []).length, activas: rutinasActivas, borradores: rutinasBorrador },
+      clientesTotales: (todosClientes || []).length,
+      clientesMes: pagosConfirmados, // En pruebas, todos los pagados son de este mes
+      pagosMes: { total: totalPagos, confirmados: pagosConfirmados, pendientes: pagosPendientes },
+      rutinasMes: { total: rutinasMes.length, activas: rutinasActivas, borradores: rutinasBorrador },
       renovaciones: { total: totalARenovar, renovadas: renovadas, noRenovadas: noRenovadas },
       porVencer: porVencerFiltrados, vencidos: vencidosFiltrados
     });
@@ -196,43 +179,6 @@ const Dashboard = () => {
     setClientesPorPlan(distribucionPlanes);
     setUltimosClientes(recientes || []);
     setCargando(false);
-  };
-
-  const enviarMasivo = async (tipo) => {
-    const lista = tipo === 'por_vencer' ? stats.porVencer : stats.vencidos;
-    const pendientes = lista.filter(r => !r.enviadoHoy);
-    
-    if (pendientes.length === 0) {
-      alert('Todos los clientes de esta lista ya recibieron su mensaje hoy.');
-      return;
-    }
-
-    setEnviandoMasivo(tipo);
-    setProgresoEnvio({ actual: 0, total: pendientes.length });
-    setMostrarModalEnvio(true);
-
-    const campo = tipo === 'por_vencer' ? 'recordatorio_por_vencer_enviado' : 'recordatorio_vencido_30d_enviado';
-
-    for (let i = 0; i < pendientes.length; i++) {
-      const rutina = pendientes[i];
-      const cliente = rutina.clientes;
-      if (!cliente) continue;
-
-      const mensaje = tipo === 'por_vencer'
-        ? `¡Hola ${cliente.nombre}! 💪\n\nTu plan de entrenamiento vence el ${new Date(rutina.fecha_vencimiento).toLocaleDateString('es-CL')}.\n\nRenueva directamente aquí: ${window.location.origin}/renovar/${rutina.token}\n\n¡Vamos con todo! 🔥`
-        : `¡Hola ${cliente.nombre}! 👋\n\nHan pasado 30 días desde que venció tu plan.\n\n¿Quieres retomar? Escríbeme por aquí. 💪`;
-
-      const telefono = cliente.telefono.replace(/[^0-9]/g, '');
-      window.open(`https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`, '_blank');
-
-      await supabase.from('rutinas').update({ [campo]: new Date().toISOString() }).eq('id', rutina.id);
-      setProgresoEnvio({ actual: i + 1, total: pendientes.length });
-
-      if (i < pendientes.length - 1) await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-
-    setEnviandoMasivo(null);
-    setTimeout(() => { setMostrarModalEnvio(false); cargarTodo(); }, 1500);
   };
 
   if (cargando) {
@@ -250,14 +196,12 @@ const Dashboard = () => {
         <Badge bg="success" className="p-2">● Sistema activo</Badge>
       </div>
 
-      {/* Fila 1: KPIs Principales */}
       <Row className="g-3 mb-4">
         <Col xs={12} md={4}><Card className="border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}><Card.Body className="p-3"><p className="mb-1 opacity-75 small">Clientes Totales</p><h4 className="fw-bold mb-0">{stats.clientesTotales}</h4><small className="opacity-75">+{stats.clientesMes} este mes</small></Card.Body></Card></Col>
         <Col xs={12} md={4}><Card className="border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)', color: 'white' }}><Card.Body className="p-3"><p className="mb-1 opacity-75 small">🔄 Por Vencer</p><h4 className="fw-bold mb-0">{stats.porVencer.length}</h4><small className="opacity-75">≤5 días</small></Card.Body></Card></Col>
         <Col xs={12} md={4}><Card className="border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)', color: 'white' }}><Card.Body className="p-3"><p className="mb-1 opacity-75 small">⚠️ Vencidos</p><h4 className="fw-bold mb-0">{stats.vencidos.length}</h4><small className="opacity-75">+30 días</small></Card.Body></Card></Col>
       </Row>
 
-      {/* Gráfico Principal */}
       <Card className="border-0 shadow-sm mb-4">
         <Card.Body className="p-3">
           <div className="mb-3"><h6 className="fw-bold mb-0">📊 Clientes Nuevos por Mes</h6></div>
@@ -275,26 +219,21 @@ const Dashboard = () => {
         </Card.Body>
       </Card>
 
-      {/* Fila 3: Gráficos Circulares */}
       <Row className="g-3 mb-4">
-        {/* Pagos */}
         <Col xs={12} md={3}><Card className="border-0 shadow-sm h-100"><Card.Body className="p-3"><h6 className="fw-bold mb-3">💰 Pagos</h6><div style={{ position: 'relative' }}><ResponsiveContainer width="100%" height={160}><PieChart><Pie data={datosPagosDona} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={3} dataKey="value">{datosPagosDona.map((e, i) => <Cell key={i} fill={e.color} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', pointerEvents: 'none' }}><div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{stats.pagosMes.total}</div></div></div><div className="d-flex justify-content-around mt-2"><div className="text-center"><Badge bg="success">{stats.pagosMes.confirmados}</Badge><br /><small>Conf.</small></div><div className="text-center"><Badge bg="warning" text="dark">{stats.pagosMes.pendientes}</Badge><br /><small>Pend.</small></div></div></Card.Body></Card></Col>
         
-        {/* Rutinas */}
         <Col xs={12} md={3}><Card className="border-0 shadow-sm h-100"><Card.Body className="p-3"><h6 className="fw-bold mb-3">📝 Rutinas</h6><div style={{ position: 'relative' }}><ResponsiveContainer width="100%" height={160}><PieChart><Pie data={datosRutinasDona} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={3} dataKey="value">{datosRutinasDona.map((e, i) => <Cell key={i} fill={e.color} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', pointerEvents: 'none' }}><div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{stats.rutinasMes.total}</div></div></div><div className="d-flex justify-content-around mt-2"><div className="text-center"><Badge bg="success">{stats.rutinasMes.activas}</Badge><br /><small>Activas</small></div><div className="text-center"><Badge bg="warning" text="dark">{stats.rutinasMes.borradores}</Badge><br /><small>Borr.</small></div></div></Card.Body></Card></Col>
 
-        {/* Renovaciones */}
         <Col xs={12} md={3}><Card className="border-0 shadow-sm h-100"><Card.Body className="p-3"><h6 className="fw-bold mb-3">🔄 Renovaciones</h6><div style={{ position: 'relative' }}><ResponsiveContainer width="100%" height={160}><PieChart><Pie data={datosRenovacionesDona} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={3} dataKey="value">{datosRenovacionesDona.map((e, i) => <Cell key={i} fill={e.color} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', pointerEvents: 'none' }}><div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{stats.renovaciones.total}</div></div></div><div className="d-flex justify-content-around mt-2"><div className="text-center"><Badge bg="success">{stats.renovaciones.renovadas}</Badge><br /><small>Renov.</small></div><div className="text-center"><Badge bg="warning" text="dark">{stats.renovaciones.noRenovadas}</Badge><br /><small>No Renov.</small></div></div></Card.Body></Card></Col>
 
-        {/* Clientes por Plan */}
         <Col xs={12} md={3}><Card className="border-0 shadow-sm h-100"><Card.Body className="p-3"><h6 className="fw-bold mb-3">🎯 Clientes por Plan</h6><ResponsiveContainer width="100%" height={160}><PieChart><Pie data={clientesPorPlan} cx="50%" cy="50%" outerRadius={65} paddingAngle={3} dataKey="value">{clientesPorPlan.map((e, i) => <Cell key={i} fill={PLAN_COLORS[e.name] || COLORS.primary} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div className="mt-2">{clientesPorPlan.map(p => <div key={p.name} className="d-flex justify-content-between small mb-1"><span><span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '3px', backgroundColor: PLAN_COLORS[p.name], marginRight: '6px' }}></span>{p.name}</span><strong>{p.value} ({p.percentage}%)</strong></div>)}</div></Card.Body></Card></Col>
       </Row>
 
-      {/* Alertas */}
       <Row className="g-3 mb-4">
         {stats.pagosMes.pendientes > 0 && (
           <Col xs={12} md={4}><Card className="border-0 shadow-sm h-100" style={{ background: '#fff3cd', borderLeft: '4px solid #ffc107' }}><Card.Body className="p-3"><h6 className="fw-bold mb-2">⚠️ Atención Requerida</h6><p className="small text-muted mb-2">Tienes {stats.pagosMes.pendientes} pago(s) por verificar.</p><Button as={Link} to="/admin/pagos-pendientes" variant="warning" size="sm" className="w-100">Revisar pagos</Button></Card.Body></Card></Col>
         )}
+        
         {stats.porVencer.length > 0 && (
           <Col xs={12} md={4}>
             <Card className="border-0 shadow-sm h-100" style={{ background: '#fff3e0', borderLeft: '4px solid #ff9800' }}>
@@ -308,17 +247,11 @@ const Dashboard = () => {
                     </div>
                   ))}
                 </div>
-                {stats.porVencer.some(r => !r.enviadoHoy) ? (
-                  <Button variant="warning" size="sm" className="w-100" onClick={() => enviarMasivo('por_vencer')} disabled={enviandoMasivo !== null}>
-                    📩 Enviar recordatorios de hoy
-                  </Button>
-                ) : (
-                  <p className="text-center text-success fw-bold mb-0 small">✅ Todos enviados hoy</p>
-                )}
               </Card.Body>
             </Card>
           </Col>
         )}
+        
         {stats.vencidos.length > 0 && (
           <Col xs={12} md={4}>
             <Card className="border-0 shadow-sm h-100" style={{ background: '#ffe6e6', borderLeft: '4px solid #f5576c' }}>
@@ -332,15 +265,12 @@ const Dashboard = () => {
                     </div>
                   ))}
                 </div>
-                {/* Botón eliminado según requerimiento: Campaña automática */}
-                <p className="text-center text-muted mb-0 small">Campaña de recuperación automática</p>
               </Card.Body>
             </Card>
           </Col>
         )}
       </Row>
 
-      {/* Últimos Clientes */}
       <Card className="border-0 shadow-sm">
         <Card.Body className="p-3">
           <div className="d-flex justify-content-between align-items-center mb-3"><h6 className="fw-bold mb-0">🕐 Últimos Clientes</h6><Button as={Link} to="/admin/clientes" variant="link" size="sm" className="p-0">Ver todos →</Button></div>
@@ -351,16 +281,6 @@ const Dashboard = () => {
           )}
         </Card.Body>
       </Card>
-
-      {/* Modal de Envío Masivo (Solo se usará para Por Vencer) */}
-      <Modal show={mostrarModalEnvio} onHide={() => {}} backdrop="static" keyboard={false} centered>
-        <Modal.Header className="bg-warning text-dark"><Modal.Title>📩 Enviando mensajes...</Modal.Title></Modal.Header>
-        <Modal.Body className="text-center p-4">
-          <h4 className="fw-bold mb-3">Enviando {progresoEnvio.actual} de {progresoEnvio.total}</h4>
-          <ProgressBar now={progresoEnvio.total > 0 ? (progresoEnvio.actual / progresoEnvio.total) * 100 : 0} animated variant="warning" style={{ height: '20px' }} />
-          <p className="text-muted small mt-3 mb-0">Por favor, no cierres esta ventana hasta que termine.</p>
-        </Modal.Body>
-      </Modal>
     </>
   );
 };
