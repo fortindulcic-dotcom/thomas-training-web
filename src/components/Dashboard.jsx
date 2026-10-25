@@ -47,7 +47,8 @@ const Dashboard = () => {
     clientesTotales: 0, clientesMes: 0,
     pagosMes: { total: 0, confirmados: 0, pendientes: 0 },
     rutinasMes: { total: 0, activas: 0, borradores: 0 },
-    tasaRenovacion: 0, porVencer: [], vencidos: []
+    renovaciones: { total: 0, renovadas: 0, noRenovadas: 0 },
+    porVencer: [], vencidos: []
   });
   const [datosMensuales, setDatosMensuales] = useState([]);
   const [clientesPorPlan, setClientesPorPlan] = useState([]);
@@ -77,28 +78,40 @@ const Dashboard = () => {
     const hoy = new Date();
     const hoyStr = hoy.toISOString().split('T')[0];
     const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString();
+    const ultimoDiaMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0, 23, 59, 59).toISOString();
     
     const en5dias = new Date(hoy); en5dias.setDate(en5dias.getDate() + 5);
     const en5diasStr = en5dias.toISOString().split('T')[0];
     const hace30dias = new Date(hoy); hace30dias.setDate(hace30dias.getDate() - 30);
     const hace30diasStr = hace30dias.toISOString().split('T')[0];
 
+    // 1. Clientes
     const { count: totalClientes } = await supabase.from('clientes').select('*', { count: 'exact', head: true }).eq('estado_pago', 'pagado');
     const { count: clientesMes } = await supabase.from('clientes').select('*', { count: 'exact', head: true }).eq('estado_pago', 'pagado').gte('created_at', primerDiaMes);
+    
+    // 2. Pagos
     const { data: pagosMes } = await supabase.from('clientes').select('pago_verificado').gte('created_at', primerDiaMes);
     const pagosConfirmados = (pagosMes || []).filter(p => p.pago_verificado).length;
     const pagosPendientes = (pagosMes || []).filter(p => !p.pago_verificado).length;
 
+    // 3. Rutinas
     const { data: rutinasMes } = await supabase.from('rutinas').select('estado').gte('created_at', primerDiaMes);
     const rutinasActivas = (rutinasMes || []).filter(r => r.estado === 'activa').length;
     const rutinasBorrador = (rutinasMes || []).filter(r => r.estado === 'borrador').length;
 
-    const { data: todosClientes } = await supabase.from('clientes').select('es_renovacion, nivel_experiencia, tipo_producto, created_at').eq('estado_pago', 'pagado');
-    const totalRenovaciones = (todosClientes || []).filter(c => c.es_renovacion).length;
-    const totalNuevos = (todosClientes || []).filter(c => !c.es_renovacion).length;
-    const tasaRenovacion = totalNuevos > 0 ? ((totalRenovaciones / totalNuevos) * 100).toFixed(0) : 0;
+    // 4. Renovaciones (Nueva lógica)
+    const { data: renovacionesMes } = await supabase
+      .from('clientes')
+      .select('estado_pago, pago_verificado')
+      .gte('fecha_vencimiento', primerDiaMes.split('T')[0])
+      .lte('fecha_vencimiento', ultimoDiaMes.split('T')[0]);
+    
+    const totalARenovar = (renovacionesMes || []).length;
+    // Cuenta como renovada si pagó, sin importar si el pago está confirmado aún o la rutina aprobada
+    const renovadas = (renovacionesMes || []).filter(c => c.estado_pago === 'pagado' || c.estado_pago === 'pendiente').length;
+    const noRenovadas = totalARenovar - renovadas;
 
-    // CONSULTAS CORREGIDAS
+    // 5. Por Vencer y Vencidos
     const { data: porVencerData } = await supabase
       .from('rutinas')
       .select('id, fecha_vencimiento, token, recordatorio_por_vencer_enviado, cliente_id')
@@ -110,11 +123,10 @@ const Dashboard = () => {
     const { data: vencidosData } = await supabase
       .from('rutinas')
       .select('id, fecha_vencimiento, token, recordatorio_vencido_30d_enviado, cliente_id')
-      .lt('fecha_vencimiento', hoyStr)
+      .lt('fecha_vencimiento', hace30diasStr)
       .eq('estado', 'activa')
       .order('fecha_vencimiento', { ascending: false });
 
-    // Obtener datos de clientes por separado
     const clienteIds = [
       ...(porVencerData || []).map(r => r.cliente_id),
       ...(vencidosData || []).map(r => r.cliente_id)
@@ -136,43 +148,48 @@ const Dashboard = () => {
       return { ...r, clientes: clientesMap[r.cliente_id], enviadoHoy };
     });
 
-    const vencidosFiltrados = (vencidosData || []).filter(r => {
-      const fechaVenc = new Date(r.fecha_vencimiento);
-      return fechaVenc <= hace30dias;
-    }).map(r => {
+    const vencidosFiltrados = (vencidosData || []).map(r => {
       const env = r.recordatorio_vencido_30d_enviado;
       const enviadoHoy = env && new Date(env).toISOString().split('T')[0] === hoyStr;
       return { ...r, clientes: clientesMap[r.cliente_id], enviadoHoy };
     });
 
+    // 6. Tendencia
+    const { data: todosClientes } = await supabase.from('clientes').select('nivel_experiencia, tipo_producto, created_at').eq('estado_pago', 'pagado');
     const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     const datos12Meses = [];
     const fechaInicio = new Date(hoy.getFullYear(), hoy.getMonth() - 11, 1);
     for (let i = 0; i < 12; i++) {
       const fecha = new Date(fechaInicio.getFullYear(), fechaInicio.getMonth() + i, 1);
       const finMes = new Date(fecha.getFullYear(), fecha.getMonth() + 1, 0, 23, 59, 59);
-      const clientesMes = (todosClientes || []).filter(c => {
+      const clientesMesCount = (todosClientes || []).filter(c => {
         const f = new Date(c.created_at);
         return f >= fecha && f <= finMes;
-      });
-      datos12Meses.push({ mes: meses[fecha.getMonth()], año: fecha.getFullYear(), clientes: clientesMes.length, etiqueta: `${meses[fecha.getMonth()]} ${String(fecha.getFullYear()).slice(-2)}` });
+      }).length;
+      datos12Meses.push({ mes: meses[fecha.getMonth()], año: fecha.getFullYear(), clientes: clientesMesCount, etiqueta: `${meses[fecha.getMonth()]} ${String(fecha.getFullYear()).slice(-2)}` });
     }
     const datosConTendencia = calcularTendencia(datos12Meses);
 
+    // 7. Clientes por Plan (con porcentaje)
     const planesCount = {};
     (todosClientes || []).forEach(c => {
       const plan = c.tipo_producto === 'rutina_prediseñada' ? 'Rutinas Prediseñadas' : c.nivel_experiencia;
       planesCount[plan] = (planesCount[plan] || 0) + 1;
     });
-    const distribucionPlanes = Object.keys(planesCount).map(plan => ({ name: plan, value: planesCount[plan] }));
+    const totalPlanes = Object.values(planesCount).reduce((a, b) => a + b, 0);
+    const distribucionPlanes = Object.keys(planesCount).map(plan => {
+      const cant = planesCount[plan];
+      const pct = totalPlanes > 0 ? Math.round((cant / totalPlanes) * 100) : 0;
+      return { name: plan, value: cant, percentage: pct };
+    });
 
-    const { data: recientes } = await supabase.from('clientes').select('*').eq('estado_pago', 'pagado').order('created_at', { ascending: false }).limit(5);
+    const { data: recientes } = await supabase.from('clientes').select('*').eq('estado_pago', 'pagado').order('created_at', { ascending: false }).limit(6);
 
     setStats({
       clientesTotales: totalClientes || 0, clientesMes: clientesMes || 0,
       pagosMes: { total: (pagosMes || []).length, confirmados: pagosConfirmados, pendientes: pagosPendientes },
       rutinasMes: { total: (rutinasMes || []).length, activas: rutinasActivas, borradores: rutinasBorrador },
-      tasaRenovacion: parseInt(tasaRenovacion),
+      renovaciones: { total: totalARenovar, renovadas: renovadas, noRenovadas: noRenovadas },
       porVencer: porVencerFiltrados, vencidos: vencidosFiltrados
     });
     setDatosMensuales(datosConTendencia);
@@ -222,9 +239,9 @@ const Dashboard = () => {
     return <div className="text-center py-5"><Spinner animation="border" variant="primary" /><p className="mt-3 text-muted">Cargando...</p></div>;
   }
 
-  const porcentajePagos = stats.pagosMes.total > 0 ? Math.round((stats.pagosMes.confirmados / stats.pagosMes.total) * 100) : 0;
   const datosPagosDona = [{ name: 'Confirmados', value: stats.pagosMes.confirmados, color: COLORS.success }, { name: 'Pendientes', value: stats.pagosMes.pendientes, color: COLORS.warning }];
   const datosRutinasDona = [{ name: 'Activas', value: stats.rutinasMes.activas, color: COLORS.success }, { name: 'Borradores', value: stats.rutinasMes.borradores, color: COLORS.warning }];
+  const datosRenovacionesDona = [{ name: 'Renovadas', value: stats.renovaciones.renovadas, color: COLORS.success }, { name: 'No Renovadas', value: stats.renovaciones.noRenovadas, color: COLORS.warning }];
 
   return (
     <>
@@ -233,14 +250,11 @@ const Dashboard = () => {
         <Badge bg="success" className="p-2">● Sistema activo</Badge>
       </div>
 
-      {/* KPIs */}
+      {/* Fila 1: KPIs Principales */}
       <Row className="g-3 mb-4">
-        <Col xs={6} lg={2}><Card className="border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}><Card.Body className="p-3"><p className="mb-1 opacity-75 small">Clientes</p><h4 className="fw-bold mb-0">{stats.clientesTotales}</h4><small className="opacity-75">+{stats.clientesMes}</small></Card.Body></Card></Col>
-        <Col xs={6} lg={2}><Card className="border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)', color: 'white' }}><Card.Body className="p-3"><p className="mb-1 opacity-75 small">Pagos</p><h4 className="fw-bold mb-0">{stats.pagosMes.confirmados}/{stats.pagosMes.total}</h4><small className="opacity-75">{porcentajePagos}%</small></Card.Body></Card></Col>
-        <Col xs={6} lg={2}><Card className="border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', color: 'white' }}><Card.Body className="p-3"><p className="mb-1 opacity-75 small">Rutinas</p><h4 className="fw-bold mb-0">{stats.rutinasMes.activas}/{stats.rutinasMes.total}</h4><small className="opacity-75">{stats.rutinasMes.borradores} borr.</small></Card.Body></Card></Col>
-        <Col xs={6} lg={2}><Card className="border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', color: 'white' }}><Card.Body className="p-3"><p className="mb-1 opacity-75 small">Renovación</p><h4 className="fw-bold mb-0">{stats.tasaRenovacion}%</h4><small className="opacity-75">vuelven</small></Card.Body></Card></Col>
-        <Col xs={6} lg={2}><Card className="border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)', color: 'white' }}><Card.Body className="p-3"><p className="mb-1 opacity-75 small">🔄 Por Vencer</p><h4 className="fw-bold mb-0">{stats.porVencer.length}</h4><small className="opacity-75">≤5 días</small></Card.Body></Card></Col>
-        <Col xs={6} lg={2}><Card className="border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)', color: 'white' }}><Card.Body className="p-3"><p className="mb-1 opacity-75 small">⚠️ Vencidos</p><h4 className="fw-bold mb-0">{stats.vencidos.length}</h4><small className="opacity-75">+30 días</small></Card.Body></Card></Col>
+        <Col xs={12} md={4}><Card className="border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}><Card.Body className="p-3"><p className="mb-1 opacity-75 small">Clientes Totales</p><h4 className="fw-bold mb-0">{stats.clientesTotales}</h4><small className="opacity-75">+{stats.clientesMes} este mes</small></Card.Body></Card></Col>
+        <Col xs={12} md={4}><Card className="border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)', color: 'white' }}><Card.Body className="p-3"><p className="mb-1 opacity-75 small">🔄 Por Vencer</p><h4 className="fw-bold mb-0">{stats.porVencer.length}</h4><small className="opacity-75">≤5 días</small></Card.Body></Card></Col>
+        <Col xs={12} md={4}><Card className="border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)', color: 'white' }}><Card.Body className="p-3"><p className="mb-1 opacity-75 small">⚠️ Vencidos</p><h4 className="fw-bold mb-0">{stats.vencidos.length}</h4><small className="opacity-75">+30 días</small></Card.Body></Card></Col>
       </Row>
 
       {/* Gráfico Principal */}
@@ -261,11 +275,19 @@ const Dashboard = () => {
         </Card.Body>
       </Card>
 
-      {/* Donas */}
+      {/* Fila 3: Gráficos Circulares */}
       <Row className="g-3 mb-4">
-        <Col xs={12} md={4}><Card className="border-0 shadow-sm h-100"><Card.Body className="p-3"><h6 className="fw-bold mb-3">💰 Pagos</h6><div style={{ position: 'relative' }}><ResponsiveContainer width="100%" height={180}><PieChart><Pie data={datosPagosDona} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3} dataKey="value">{datosPagosDona.map((e, i) => <Cell key={i} fill={e.color} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', pointerEvents: 'none' }}><div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#1a1f36' }}>{stats.pagosMes.total}</div><small className="text-muted">Total</small></div></div><div className="d-flex justify-content-around mt-2"><div className="text-center"><Badge bg="success">{stats.pagosMes.confirmados}</Badge><br /><small>Confirmados</small></div><div className="text-center"><Badge bg="warning" text="dark">{stats.pagosMes.pendientes}</Badge><br /><small>Pendientes</small></div></div></Card.Body></Card></Col>
-        <Col xs={12} md={4}><Card className="border-0 shadow-sm h-100"><Card.Body className="p-3"><h6 className="fw-bold mb-3">📝 Rutinas</h6><div style={{ position: 'relative' }}><ResponsiveContainer width="100%" height={180}><PieChart><Pie data={datosRutinasDona} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3} dataKey="value">{datosRutinasDona.map((e, i) => <Cell key={i} fill={e.color} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', pointerEvents: 'none' }}><div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#1a1f36' }}>{stats.rutinasMes.total}</div><small className="text-muted">Total</small></div></div><div className="d-flex justify-content-around mt-2"><div className="text-center"><Badge bg="success">{stats.rutinasMes.activas}</Badge><br /><small>Activas</small></div><div className="text-center"><Badge bg="warning" text="dark">{stats.rutinasMes.borradores}</Badge><br /><small>Borradores</small></div></div></Card.Body></Card></Col>
-        <Col xs={12} md={4}><Card className="border-0 shadow-sm h-100"><Card.Body className="p-3"><h6 className="fw-bold mb-3">🎯 Clientes por Plan</h6><ResponsiveContainer width="100%" height={180}><PieChart><Pie data={clientesPorPlan} cx="50%" cy="50%" outerRadius={75} paddingAngle={3} dataKey="value">{clientesPorPlan.map((e, i) => <Cell key={i} fill={PLAN_COLORS[e.name] || COLORS.primary} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div className="mt-2">{clientesPorPlan.map(p => <div key={p.name} className="d-flex justify-content-between small mb-1"><span><span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '3px', backgroundColor: PLAN_COLORS[p.name], marginRight: '8px' }}></span>{p.name}</span><strong>{p.value}</strong></div>)}</div></Card.Body></Card></Col>
+        {/* Pagos */}
+        <Col xs={12} md={3}><Card className="border-0 shadow-sm h-100"><Card.Body className="p-3"><h6 className="fw-bold mb-3">💰 Pagos</h6><div style={{ position: 'relative' }}><ResponsiveContainer width="100%" height={160}><PieChart><Pie data={datosPagosDona} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={3} dataKey="value">{datosPagosDona.map((e, i) => <Cell key={i} fill={e.color} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', pointerEvents: 'none' }}><div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{stats.pagosMes.total}</div></div></div><div className="d-flex justify-content-around mt-2"><div className="text-center"><Badge bg="success">{stats.pagosMes.confirmados}</Badge><br /><small>Conf.</small></div><div className="text-center"><Badge bg="warning" text="dark">{stats.pagosMes.pendientes}</Badge><br /><small>Pend.</small></div></div></Card.Body></Card></Col>
+        
+        {/* Rutinas */}
+        <Col xs={12} md={3}><Card className="border-0 shadow-sm h-100"><Card.Body className="p-3"><h6 className="fw-bold mb-3">📝 Rutinas</h6><div style={{ position: 'relative' }}><ResponsiveContainer width="100%" height={160}><PieChart><Pie data={datosRutinasDona} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={3} dataKey="value">{datosRutinasDona.map((e, i) => <Cell key={i} fill={e.color} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', pointerEvents: 'none' }}><div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{stats.rutinasMes.total}</div></div></div><div className="d-flex justify-content-around mt-2"><div className="text-center"><Badge bg="success">{stats.rutinasMes.activas}</Badge><br /><small>Activas</small></div><div className="text-center"><Badge bg="warning" text="dark">{stats.rutinasMes.borradores}</Badge><br /><small>Borr.</small></div></div></Card.Body></Card></Col>
+
+        {/* Renovaciones */}
+        <Col xs={12} md={3}><Card className="border-0 shadow-sm h-100"><Card.Body className="p-3"><h6 className="fw-bold mb-3">🔄 Renovaciones</h6><div style={{ position: 'relative' }}><ResponsiveContainer width="100%" height={160}><PieChart><Pie data={datosRenovacionesDona} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={3} dataKey="value">{datosRenovacionesDona.map((e, i) => <Cell key={i} fill={e.color} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', pointerEvents: 'none' }}><div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{stats.renovaciones.total}</div></div></div><div className="d-flex justify-content-around mt-2"><div className="text-center"><Badge bg="success">{stats.renovaciones.renovadas}</Badge><br /><small>Renov.</small></div><div className="text-center"><Badge bg="warning" text="dark">{stats.renovaciones.noRenovadas}</Badge><br /><small>No Renov.</small></div></div></Card.Body></Card></Col>
+
+        {/* Clientes por Plan */}
+        <Col xs={12} md={3}><Card className="border-0 shadow-sm h-100"><Card.Body className="p-3"><h6 className="fw-bold mb-3">🎯 Clientes por Plan</h6><ResponsiveContainer width="100%" height={160}><PieChart><Pie data={clientesPorPlan} cx="50%" cy="50%" outerRadius={65} paddingAngle={3} dataKey="value">{clientesPorPlan.map((e, i) => <Cell key={i} fill={PLAN_COLORS[e.name] || COLORS.primary} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div className="mt-2">{clientesPorPlan.map(p => <div key={p.name} className="d-flex justify-content-between small mb-1"><span><span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '3px', backgroundColor: PLAN_COLORS[p.name], marginRight: '6px' }}></span>{p.name}</span><strong>{p.value} ({p.percentage}%)</strong></div>)}</div></Card.Body></Card></Col>
       </Row>
 
       {/* Alertas */}
@@ -310,13 +332,8 @@ const Dashboard = () => {
                     </div>
                   ))}
                 </div>
-                {stats.vencidos.some(r => !r.enviadoHoy) ? (
-                  <Button variant="danger" size="sm" className="w-100" onClick={() => enviarMasivo('vencidos')} disabled={enviandoMasivo !== null}>
-                    📩 Enviar campaña de recuperación
-                  </Button>
-                ) : (
-                  <p className="text-center text-success fw-bold mb-0 small">✅ Todos enviados hoy</p>
-                )}
+                {/* Botón eliminado según requerimiento: Campaña automática */}
+                <p className="text-center text-muted mb-0 small">Campaña de recuperación automática</p>
               </Card.Body>
             </Card>
           </Col>
@@ -335,7 +352,7 @@ const Dashboard = () => {
         </Card.Body>
       </Card>
 
-      {/* Modal de Envío Masivo */}
+      {/* Modal de Envío Masivo (Solo se usará para Por Vencer) */}
       <Modal show={mostrarModalEnvio} onHide={() => {}} backdrop="static" keyboard={false} centered>
         <Modal.Header className="bg-warning text-dark"><Modal.Title>📩 Enviando mensajes...</Modal.Title></Modal.Header>
         <Modal.Body className="text-center p-4">
