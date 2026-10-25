@@ -286,9 +286,13 @@ const Dashboard = () => {
                     </div>
                   ))}
                 </div>
-                <Button variant="warning" size="sm" className="w-100" onClick={() => enviarMasivo('por_vencer')} disabled={enviandoMasivo !== null}>
-                  📩 Enviar recordatorios de hoy
-                </Button>
+                {stats.porVencer.some(r => !r.enviadoHoy) ? (
+                  <Button variant="warning" size="sm" className="w-100" onClick={() => enviarMasivo('por_vencer')} disabled={enviandoMasivo !== null}>
+                    📩 Enviar recordatorios de hoy
+                  </Button>
+                ) : (
+                  <p className="text-center text-success fw-bold mb-0 small">✅ Todos enviados hoy</p>
+                )}
               </Card.Body>
             </Card>
           </Col>
@@ -306,9 +310,13 @@ const Dashboard = () => {
                     </div>
                   ))}
                 </div>
-                <Button variant="danger" size="sm" className="w-100" onClick={() => enviarMasivo('vencidos')} disabled={enviandoMasivo !== null}>
-                  📩 Enviar campaña de recuperación
-                </Button>
+                {stats.vencidos.some(r => !r.enviadoHoy) ? (
+                  <Button variant="danger" size="sm" className="w-100" onClick={() => enviarMasivo('vencidos')} disabled={enviandoMasivo !== null}>
+                    📩 Enviar campaña de recuperación
+                  </Button>
+                ) : (
+                  <p className="text-center text-success fw-bold mb-0 small">✅ Todos enviados hoy</p>
+                )}
               </Card.Body>
             </Card>
           </Col>

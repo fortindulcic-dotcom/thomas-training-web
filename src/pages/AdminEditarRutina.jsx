@@ -20,7 +20,6 @@ const AdminEditarRutina = () => {
   const [diaActivo, setDiaActivo] = useState('');
   const [mostrarModalLink, setMostrarModalLink] = useState(false);
   const [linkGenerado, setLinkGenerado] = useState('');
-  const [urlWhatsApp, setUrlWhatsApp] = useState('');
 
   useEffect(() => {
     cargarRutina();
@@ -173,11 +172,16 @@ const AdminEditarRutina = () => {
   };
 
   const aprobarRutina = async () => {
-    if (!window.confirm('¿Aprobar esta rutina? Se generará un link único y estará listo para enviar por WhatsApp.')) return;
+    if (!window.confirm('¿Aprobar esta rutina? Se generará un link único y se enviará por WhatsApp.')) return;
+
+    // 1. Abrimos la ventana de WhatsApp INMEDIATAMENTE (aprovechando el clic del usuario)
+    // Esto evita que el navegador del celular la bloquee.
+    const ventanaWhatsApp = window.open('', '_blank');
 
     setGuardando(true);
     setMensaje(null);
 
+    // 2. Guardamos los cambios y hacemos las operaciones lentas de base de datos
     await guardarCambios();
 
     let tokenFinal = rutina.token;
@@ -201,6 +205,7 @@ const AdminEditarRutina = () => {
       }
 
       if (!tokenDisponible) {
+        if (ventanaWhatsApp) ventanaWhatsApp.close();
         setMensaje({ type: 'danger', text: 'No se pudo generar un token único. Intenta de nuevo.' });
         setGuardando(false);
         return;
@@ -211,7 +216,7 @@ const AdminEditarRutina = () => {
     const fechaVencimiento = new Date(hoy);
     fechaVencimiento.setDate(fechaVencimiento.getDate() + 30);
 
-    // ARCHIVAR RUTINA ANTERIOR SI ES RENOVACIÓN
+    // 3. Archivar rutina anterior si es renovación
     if (rutina.rutina_anterior_id) {
       await supabase
         .from('rutinas')
@@ -219,6 +224,7 @@ const AdminEditarRutina = () => {
         .eq('id', rutina.rutina_anterior_id);
     }
 
+    // 4. Actualizar la rutina actual a activa
     const { error } = await supabase
       .from('rutinas')
       .update({
@@ -232,6 +238,7 @@ const AdminEditarRutina = () => {
       .eq('id', rutinaId);
 
     if (error) {
+      if (ventanaWhatsApp) ventanaWhatsApp.close();
       setMensaje({ type: 'danger', text: 'Error al aprobar: ' + error.message });
       setGuardando(false);
       return;
@@ -251,10 +258,16 @@ const AdminEditarRutina = () => {
     );
 
     const telefono = normalizarTelefono(cliente.telefono);
-    setUrlWhatsApp(`https://wa.me/${telefono}?text=${mensajeWhatsApp}`);
+    const urlWA = `https://wa.me/${telefono}?text=${mensajeWhatsApp}`;
 
-    // Ya NO abrimos window.open aquí. Solo mostramos el modal.
-    setMostrarModalLink(true);
+    // 5. Redirigir la ventana que abrimos al inicio hacia WhatsApp
+    if (ventanaWhatsApp) {
+      ventanaWhatsApp.location.href = urlWA;
+    } else {
+      // Si el navegador bloqueó la ventana inicial (raro, pero posible), mostramos el modal
+      setMostrarModalLink(true);
+    }
+
     setGuardando(false);
     cargarRutina();
   };
@@ -441,20 +454,7 @@ const AdminEditarRutina = () => {
         </Modal.Header>
         <Modal.Body>
           <p>La rutina de <strong>{cliente.nombre}</strong> está activa.</p>
-          <p className="mb-2">Haz clic en el botón verde para enviar el link al cliente por WhatsApp:</p>
-          
-          <Button
-            variant="success"
-            size="lg"
-            className="w-100 mb-3"
-            href={urlWhatsApp}
-            target="_blank"
-            rel="noreferrer"
-          >
-            💬 Enviar por WhatsApp
-          </Button>
-
-          <p className="small text-muted mb-2">O copia el link manualmente:</p>
+          <p className="mb-2">Si WhatsApp no se abrió, copia el link manualmente:</p>
           <InputGroup className="mb-3">
             <Form.Control value={linkGenerado} readOnly />
             <Button variant="primary" onClick={copiarLink}>📋 Copiar</Button>

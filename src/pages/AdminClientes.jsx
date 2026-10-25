@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Container, Table, Badge, Alert, Spinner, Form, Row, Col, Card, Button } from 'react-bootstrap';
+import { Container, Table, Badge, Alert, Spinner, Form, Row, Col, Card, Button, ButtonGroup } from 'react-bootstrap';
 import { supabase } from '../utils/supabase';
 import { useEsMovil } from '../utils/useEsMovil';
 
@@ -9,20 +9,21 @@ const AdminClientes = () => {
   const [cargando, setCargando] = useState(true);
   const [mensaje, setMensaje] = useState(null);
   const [busqueda, setBusqueda] = useState('');
-  const [filtroPago, setFiltroPago] = useState('todos');
+  const [filtroEstado, setFiltroEstado] = useState('todos');
   const esMovil = useEsMovil();
 
   const cargarClientes = async () => {
     setCargando(true);
+    
+    // Traemos clientes con sus rutinas para saber si renovaron
     const { data, error } = await supabase
       .from('clientes')
       .select(`
         *,
         rutinas (
           id,
-          token,
           estado,
-          fecha_vencimiento
+          token
         )
       `)
       .order('created_at', { ascending: false });
@@ -30,8 +31,19 @@ const AdminClientes = () => {
     if (error) {
       setMensaje({ type: 'danger', text: 'Error al cargar: ' + error.message });
     } else {
-      setClientes(data || []);
-      setFiltrados(data || []);
+      // Calcular estado de cada cliente
+      const conEstado = (data || []).map(c => {
+        const tieneRutina = c.rutinas && c.rutinas.length > 0;
+        const tieneRenovacion = c.rutinas && c.rutinas.length > 1;
+        let estado = 'pendiente';
+        if (c.pago_verificado) {
+          estado = tieneRenovacion ? 'renovado' : 'pagado';
+        }
+        return { ...c, estadoCalculado: estado, totalRutinas: c.rutinas?.length || 0 };
+      });
+
+      setClientes(conEstado);
+      setFiltrados(conEstado);
     }
     setCargando(false);
   };
@@ -43,25 +55,43 @@ const AdminClientes = () => {
 
   useEffect(() => {
     let resultado = clientes;
+    
     if (busqueda) {
       resultado = resultado.filter(c =>
         c.nombre?.toLowerCase().includes(busqueda.toLowerCase()) ||
         c.email?.toLowerCase().includes(busqueda.toLowerCase())
       );
     }
-    if (filtroPago === 'pagado') {
-      resultado = resultado.filter(c => c.pago_verificado === true);
-    } else if (filtroPago === 'pendiente') {
-      resultado = resultado.filter(c => c.pago_verificado === false);
+    
+    if (filtroEstado !== 'todos') {
+      resultado = resultado.filter(c => c.estadoCalculado === filtroEstado);
     }
+    
     setFiltrados(resultado);
-  }, [busqueda, filtroPago, clientes]);
+  }, [busqueda, filtroEstado, clientes]);
 
   const copiarLink = (token) => {
     const link = `${window.location.origin}/r/${token}`;
     navigator.clipboard.writeText(link);
     alert('✅ Link copiado al portapapeles');
   };
+
+  const agregarContacto = (cliente) => {
+    const telefono = cliente.telefono || '';
+    navigator.clipboard.writeText(telefono);
+    
+    const mensaje = encodeURIComponent(
+      `Hola ${cliente.nombre}, soy Thomas Trainer. ¿Me agregas a tus contactos para enviarte tus rutinas?`
+    );
+    const telefonoLimpio = telefono.replace(/[^0-9]/g, '');
+    window.open(`https://wa.me/${telefonoLimpio}?text=${mensaje}`, '_blank');
+  };
+
+  // Contadores
+  const totalTodos = clientes.length;
+  const totalPagados = clientes.filter(c => c.estadoCalculado === 'pagado').length;
+  const totalRenovados = clientes.filter(c => c.estadoCalculado === 'renovado').length;
+  const totalPendientes = clientes.filter(c => c.estadoCalculado === 'pendiente').length;
 
   if (cargando) {
     return (
@@ -79,28 +109,56 @@ const AdminClientes = () => {
           <h4 className="fw-bold mb-1">👥 Todos los Clientes</h4>
           <p className="text-muted mb-0 small">Historial completo de clientes.</p>
         </div>
-        <Badge bg="primary" className="p-2">
-          Total: {clientes.length}
-        </Badge>
+        <div className="d-flex gap-2 flex-wrap">
+          <Badge bg="secondary" className="p-2">Total: {totalTodos}</Badge>
+          <Badge bg="success" className="p-2">Pagados: {totalPagados}</Badge>
+          <Badge bg="info" className="p-2">Renovados: {totalRenovados}</Badge>
+          <Badge bg="warning" text="dark" className="p-2">Pendientes: {totalPendientes}</Badge>
+        </div>
       </div>
 
       {mensaje && <Alert variant={mensaje.type}>{mensaje.text}</Alert>}
 
       <div className="bg-white p-3 rounded shadow-sm mb-3">
         <Row className="g-2">
-          <Col xs={12} md={8}>
+          <Col xs={12} md={6}>
             <Form.Control
               placeholder="🔍 Buscar por nombre o email..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
             />
           </Col>
-          <Col xs={12} md={4}>
-            <Form.Select value={filtroPago} onChange={(e) => setFiltroPago(e.target.value)}>
-              <option value="todos">Todos los estados</option>
-              <option value="pagado">✅ Pagados</option>
-              <option value="pendiente">⏳ Pendientes</option>
-            </Form.Select>
+          <Col xs={12} md={6}>
+            <ButtonGroup className="w-100">
+              <Button
+                variant={filtroEstado === 'todos' ? 'primary' : 'outline-primary'}
+                onClick={() => setFiltroEstado('todos')}
+                size="sm"
+              >
+                Todos
+              </Button>
+              <Button
+                variant={filtroEstado === 'pagado' ? 'success' : 'outline-success'}
+                onClick={() => setFiltroEstado('pagado')}
+                size="sm"
+              >
+                Pagados
+              </Button>
+              <Button
+                variant={filtroEstado === 'renovado' ? 'info' : 'outline-info'}
+                onClick={() => setFiltroEstado('renovado')}
+                size="sm"
+              >
+                Renovados
+              </Button>
+              <Button
+                variant={filtroEstado === 'pendiente' ? 'warning' : 'outline-warning'}
+                onClick={() => setFiltroEstado('pendiente')}
+                size="sm"
+              >
+                Pendientes
+              </Button>
+            </ButtonGroup>
           </Col>
         </Row>
       </div>
@@ -110,7 +168,7 @@ const AdminClientes = () => {
       ) : esMovil ? (
         <div className="d-flex flex-column gap-2">
           {filtrados.map((c) => {
-            const rutina = c.rutinas && c.rutinas[0];
+            const rutinaActiva = c.rutinas?.find(r => r.estado === 'activa');
             return (
               <Card key={c.id} className="border-0 shadow-sm">
                 <Card.Body className="p-3">
@@ -121,11 +179,9 @@ const AdminClientes = () => {
                         {new Date(c.created_at).toLocaleDateString('es-CL')}
                       </small>
                     </div>
-                    {c.pago_verificado ? (
-                      <Badge bg="success">✅ Pagado</Badge>
-                    ) : (
-                      <Badge bg="warning" text="dark">⏳ Pendiente</Badge>
-                    )}
+                    {c.estadoCalculado === 'renovado' && <Badge bg="info">🔄 Renovado</Badge>}
+                    {c.estadoCalculado === 'pagado' && <Badge bg="success">✅ Pagado</Badge>}
+                    {c.estadoCalculado === 'pendiente' && <Badge bg="warning" text="dark">⏳ Pendiente</Badge>}
                   </div>
                   <div className="small mb-2">
                     <div>📧 {c.email}</div>
@@ -134,26 +190,36 @@ const AdminClientes = () => {
                   <div className="d-flex gap-2 flex-wrap mb-2">
                     <Badge bg="primary">{c.nivel_experiencia}</Badge>
                     <Badge bg="secondary">IMC: {c.imc || '-'}</Badge>
+                    <Badge bg="dark">{c.totalRutinas} rutina(s)</Badge>
                   </div>
-                  {rutina && rutina.token && (
-                    <div className="d-flex gap-2">
-                      <Button
-                        variant="outline-info"
-                        size="sm"
-                        onClick={() => copiarLink(rutina.token)}
-                      >
-                        🔗 Copiar link rutina
-                      </Button>
-                      <a
-                        href={`${window.location.origin}/r/${rutina.token}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn btn-sm btn-outline-primary"
-                      >
-                        👁️ Ver
-                      </a>
-                    </div>
-                  )}
+                  <div className="d-flex gap-2">
+                    {rutinaActiva && rutinaActiva.token && (
+                      <>
+                        <Button
+                          variant="outline-info"
+                          size="sm"
+                          onClick={() => copiarLink(rutinaActiva.token)}
+                        >
+                          🔗 Copiar link
+                        </Button>
+                        <a
+                          href={`${window.location.origin}/r/${rutinaActiva.token}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-sm btn-outline-primary"
+                        >
+                          👁️ Ver
+                        </a>
+                      </>
+                    )}
+                    <Button
+                      variant="outline-success"
+                      size="sm"
+                      onClick={() => agregarContacto(c)}
+                    >
+                      📇 Agregar
+                    </Button>
+                  </div>
                 </Card.Body>
               </Card>
             );
@@ -164,27 +230,23 @@ const AdminClientes = () => {
           <Table hover responsive className="mb-0">
             <thead className="bg-light">
               <tr>
-                <th>Fecha Registro</th>
+                <th>Fecha</th>
                 <th>Nombre</th>
                 <th>Email</th>
                 <th>WhatsApp</th>
                 <th>Plan</th>
-                <th>IMC</th>
-                <th>Estado Pago</th>
-                <th>Link Rutina</th>
+                <th>Estado</th>
+                <th>Rutinas</th>
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
               {filtrados.map((c) => {
-                const rutina = c.rutinas && c.rutinas[0];
+                const rutinaActiva = c.rutinas?.find(r => r.estado === 'activa');
                 return (
                   <tr key={c.id}>
                     <td className="text-nowrap">
-                      {new Date(c.created_at).toLocaleDateString('es-CL', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric'
-                      })}
+                      {new Date(c.created_at).toLocaleDateString('es-CL')}
                     </td>
                     <td className="fw-bold">{c.nombre}</td>
                     <td>{c.email}</td>
@@ -194,36 +256,46 @@ const AdminClientes = () => {
                       </a>
                     </td>
                     <td><Badge bg="primary">{c.nivel_experiencia}</Badge></td>
-                    <td>{c.imc || '-'}</td>
                     <td>
-                      {c.pago_verificado ? (
-                        <Badge bg="success">✅ Pagado</Badge>
-                      ) : (
-                        <Badge bg="warning" text="dark">⏳ Pendiente</Badge>
-                      )}
+                      {c.estadoCalculado === 'renovado' && <Badge bg="info">🔄 Renovado</Badge>}
+                      {c.estadoCalculado === 'pagado' && <Badge bg="success">✅ Pagado</Badge>}
+                      {c.estadoCalculado === 'pendiente' && <Badge bg="warning" text="dark">⏳ Pendiente</Badge>}
+                    </td>
+                    <td className="text-center">
+                      <Badge bg="dark">{c.totalRutinas}</Badge>
                     </td>
                     <td>
-                      {rutina && rutina.token ? (
-                        <div className="d-flex gap-1">
-                          <Button
-                            variant="outline-info"
-                            size="sm"
-                            onClick={() => copiarLink(rutina.token)}
-                          >
-                            🔗 Copiar
-                          </Button>
-                          <a
-                            href={`${window.location.origin}/r/${rutina.token}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="btn btn-sm btn-outline-primary"
-                          >
-                            👁️
-                          </a>
-                        </div>
-                      ) : (
-                        <span className="text-muted small">Sin rutina</span>
-                      )}
+                      <div className="d-flex gap-1">
+                        {rutinaActiva && rutinaActiva.token && (
+                          <>
+                            <Button
+                              variant="outline-info"
+                              size="sm"
+                              onClick={() => copiarLink(rutinaActiva.token)}
+                              title="Copiar link de rutina"
+                            >
+                              🔗
+                            </Button>
+                            <a
+                              href={`${window.location.origin}/r/${rutinaActiva.token}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="btn btn-sm btn-outline-primary"
+                              title="Ver rutina"
+                            >
+                              👁️
+                            </a>
+                          </>
+                        )}
+                        <Button
+                          variant="outline-success"
+                          size="sm"
+                          onClick={() => agregarContacto(c)}
+                          title="Agregar a contactos"
+                        >
+                          📇
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 );
