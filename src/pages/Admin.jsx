@@ -89,6 +89,9 @@ const Admin = () => {
         <Nav.Link as={Link} to="/admin/pagos-pendientes" onClick={() => setMenuAbierto(false)} className={`text-white mb-2 px-3 py-2 rounded ${esPagos ? 'bg-primary' : ''}`}>
           <span className="me-2">💰</span> Confirmar Pagos
         </Nav.Link>
+        <Nav.Link as={Link} to="/admin/renovaciones" className={`text-white mb-2 px-3 py-2 rounded ${path.includes('renovaciones') ? 'bg-primary' : ''}`}>
+          <span className="me-2">🔄</span> Renovaciones
+        </Nav.Link>
         <Nav.Link as={Link} to="/admin/generar-rutina" onClick={() => setMenuAbierto(false)} className={`text-white mb-2 px-3 py-2 rounded ${esRutinas ? 'bg-primary' : ''}`}>
           <span className="me-2">📝</span> Gestión de Rutinas
         </Nav.Link>

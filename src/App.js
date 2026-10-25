@@ -19,6 +19,7 @@ import AdminClientes from './pages/AdminClientes';
 import MiRutina from './pages/MiRutina';
 import AdminEditarRutina from './pages/AdminEditarRutina';
 import Renovar from './pages/Renovar';
+import AdminRenovaciones from './pages/AdminRenovaciones';
 
 function App() {
   return (
@@ -44,6 +45,7 @@ function App() {
             <Route path="clientes" element={<AdminClientes />} />
             <Route path="rutina/:rutinaId" element={<AdminEditarRutina />} />
             <Route path="rutina/:rutinaId" element={<AdminEditarRutina />} />
+            <Route path="renovaciones" element={<AdminRenovaciones />} />
           </Route>
           
           <Route path="/plan-rutinas" element={<PlanRutinas />} />
