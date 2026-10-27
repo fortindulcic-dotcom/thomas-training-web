@@ -1,5 +1,6 @@
+// src/pages/Admision.jsx
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Alert, Badge } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Alert } from 'react-bootstrap';
 import { useSearchParams } from 'react-router-dom';
 import IntakeFormPublico from '../components/IntakeFormPublico';
 import { supabase } from '../utils/supabase';
@@ -25,22 +26,22 @@ const Admision = () => {
   }, [planPreseleccionado]);
 
   const obtenerLinkPago = (nivel) => {
+    // CORRECCIÓN: Eliminado "Básico" para estandarizar todo a Principiante
     const links = {
       'Principiante': 'https://www.webpay.cl/form-pay/423837',
       'Intermedio': 'https://www.webpay.cl/form-pay/423861',
       'Avanzado': 'https://www.webpay.cl/form-pay/423862',
-      'Básico': 'https://www.webpay.cl/form-pay/423837',
     };
     return links[nivel] || 'https://www.webpay.cl/form-pay/423837';
   };
 
   const obtenerMensajeWhatsApp = (cliente) => {
     const plan = cliente.nivel_experiencia;
+    // CORRECCIÓN: Eliminado "Básico" de los precios
     const precios = {
       'Principiante': '$60.000',
       'Intermedio': '$90.000',
       'Avanzado': '$150.000',
-      'Básico': '$60.000'
     };
     const precio = precios[plan] || '$XX.XXX';
 
@@ -78,7 +79,7 @@ const Admision = () => {
 
     const cliente = clienteData[0];
 
-    // 2. Abrir Webpay en ventana pequeña (no tapa la pantalla principal)
+    // 2. Abrir Webpay en ventana pequeña
     const ancho = 500;
     const alto = 700;
     const left = (window.screen.width - ancho) / 2;
