@@ -3,85 +3,73 @@ import React, { useState } from 'react';
 import { Container, Row, Col, Form, Button, Card, Alert } from 'react-bootstrap';
 
 const Contacto = () => {
-  // 1. Estado para los datos del formulario
   const [nombre, setNombre] = useState('');
-  const [email, setEmail] = useState('');
   const [mensaje, setMensaje] = useState('');
   const [status, setStatus] = useState({ type: '', msg: '' });
 
-  // 2. Función de manejo del envío
   const handleSubmit = (e) => {
     e.preventDefault();
     setStatus({ type: '', msg: '' });
 
-    // Validaciones básicas
-    if (!nombre || !email || !mensaje) {
-      setStatus({ type: 'danger', msg: 'Por favor, completa todos los campos.' });
+    if (!nombre || !mensaje) {
+      setStatus({ type: 'danger', msg: 'Por favor, completa tu nombre y tu mensaje.' });
       return;
     }
 
-    // Validación simple de email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setStatus({ type: 'danger', msg: 'Por favor, ingresa un email válido.' });
-      return;
-    }
-
-    // Aquí iría la lógica para enviar el mensaje (ej: a un backend o servicio de correo)
-    // Por ahora, simulamos un envío exitoso
-    console.log('Datos enviados:', { nombre, email, mensaje });
+    // Número de Thomas (sin el +)
+    const numero = '56995484848';
     
-    setStatus({ type: 'success', msg: '¡Gracias! Tu mensaje ha sido enviado correctamente.' });
+    // Armamos el mensaje con el nombre del cliente
+    const texto = `Hola Thomas, soy ${nombre}. ${mensaje}`;
     
-    // Limpiar formulario
+    // Abrimos WhatsApp en una pestaña nueva
+    window.open(`https://wa.me/${numero}?text=${encodeURIComponent(texto)}`, '_blank');
+    
+    // Mostramos un mensaje de éxito
+    setStatus({ type: 'success', msg: '¡Abriendo WhatsApp! Por favor, presiona "Enviar" en la aplicación para completar tu mensaje.' });
+    
+    // Limpiamos el formulario
     setNombre('');
-    setEmail('');
     setMensaje('');
   };
 
   return (
     <Container className="py-5">
       <Row className="justify-content-center">
-        <Col md={8}>
-          <Card className="shadow-sm">
-            <Card.Header className="bg-success text-white">
-              <h3 className="mb-0">Contáctanos</h3>
+        <Col md={8} lg={6}>
+          <Card className="shadow-sm border-0">
+            <Card.Header className="bg-success text-white py-3">
+              <h3 className="mb-0">Contáctanos por WhatsApp</h3>
             </Card.Header>
-            <Card.Body>
+            <Card.Body className="p-4">
+              <p className="text-muted mb-4">
+                ¿Tienes dudas? Escríbenos y te responderemos a la brevedad.
+              </p>
+              
               <Form onSubmit={handleSubmit}>
                 <Form.Group className="mb-3" controlId="formNombre">
-                  <Form.Label>Nombre</Form.Label>
+                  <Form.Label className="fw-bold">Tu Nombre</Form.Label>
                   <Form.Control
                     type="text"
-                    placeholder="Tu nombre completo"
+                    placeholder="Ej: Juan Pérez"
                     value={nombre}
                     onChange={(e) => setNombre(e.target.value)}
                   />
                 </Form.Group>
 
-                <Form.Group className="mb-3" controlId="formEmail">
-                  <Form.Label>Correo Electrónico</Form.Label>
-                  <Form.Control
-                    type="email"
-                    placeholder="ejemplo@correo.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </Form.Group>
-
-                <Form.Group className="mb-3" controlId="formMensaje">
-                  <Form.Label>Mensaje</Form.Label>
+                <Form.Group className="mb-4" controlId="formMensaje">
+                  <Form.Label className="fw-bold">Tu Mensaje</Form.Label>
                   <Form.Control
                     as="textarea"
-                    rows={5}
-                    placeholder="¿En qué podemos ayudarte?"
+                    rows={4}
+                    placeholder="¿En qué te podemos ayudar?"
                     value={mensaje}
                     onChange={(e) => setMensaje(e.target.value)}
                   />
                 </Form.Group>
 
-                <Button variant="success" type="submit" className="w-100">
-                  Enviar Mensaje
+                <Button variant="success" type="submit" className="w-100 fw-bold py-2">
+                  💬 Enviar por WhatsApp
                 </Button>
               </Form>
 

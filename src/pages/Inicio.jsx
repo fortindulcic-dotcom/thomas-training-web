@@ -7,7 +7,7 @@ const Inicio = () => {
   // Componente React Controla si el Modal del "compromiso completo" está abierto o cerrado
   const [mostrarCompromiso, setMostrarCompromiso] = useState(false);
 
-  // Componente React Función para simular el envío de WhatsApp (puedes agregar tu lógica real aquí)
+  // Componente React Función para simular el envío de WhatsApp
   const enviarWhatsApp = () => {
     const nombre = document.getElementById('nombreInput').value;
     const mensaje = document.getElementById('mensajeInput').value;
@@ -25,7 +25,6 @@ const Inicio = () => {
       {/* 1. Sección Hero con Video de Fondo */}
       <div className="mi-fondo-foto" style={{ position: 'relative', minHeight: '80vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: 'white', overflow: 'hidden', padding: '20px', textAlign: 'center' }}>
         <video autoPlay muted loop playsInline className="video-background" style={{ position: 'absolute', top: '50%', left: '50%', width: '100%', height: '100%', objectFit: 'cover', transform: 'translate(-50%, -50%)', zIndex: '0', filter: 'brightness(40%)' }}>
-          {/* Asegúrate de que el video esté en public/videotemacentral.mp4 */}
           <source src="/videotemacentral.mp4" type="video/mp4" />
           Tu navegador no soporta videos.
         </video>
@@ -33,7 +32,6 @@ const Inicio = () => {
         <div className="hero-content" style={{ position: 'relative', zIndex: '2' }}>
           <h1 className="display-3 fw-bold">Disciplina sobre motivación. Siempre !!</h1>
           <p className="h4">Empieza Ahora !!</p>
-          {/* Enlace a la página de Evaluación */}
           <Link to="/evaluacion" className="btn btn-info btn-lg mt-3 fw-bold">
             EVALÚA TU ESTADO AQUÍ
           </Link>
@@ -59,12 +57,12 @@ const Inicio = () => {
             </div>
           </div>
 
-          {/* Plan Básico */}
+          {/* CAMBIO: Plan Básico -> Plan Principiante */}
           <div className="col-sm-12 col-md-6 col-lg-3 mb-4">
             <div className="border border-secondary rounded p-3 h-100">
-              <h3 className="text-primary">Plan Básico</h3>
+              <h3 className="text-primary">Plan Principiante</h3>
               <p className="text-secondary">Pago único</p>
-              <img src="/images/Beginner.jpg" className="img-thumbnail mb-3 w-100" alt="Plan Básico" />
+              <img src="/images/Beginner.jpg" className="img-thumbnail mb-3 w-100" alt="Plan Principiante" />
               <Link to="/plan-basico" className="btn btn-primary w-100 fw-bold">+ Info</Link>
             </div>
           </div>
@@ -106,7 +104,7 @@ const Inicio = () => {
                 <label htmlFor="mensajeInput" className="form-label">Pregúntame....Yo te Respondo !!</label>
                 <textarea className="form-control" id="mensajeInput" rows="3"></textarea>
               </div>
-              <button type="button" className="btn btn-info w-100 text-white fw-bold" onClick={enviarWhatsApp}>
+              <button type="button" className="btn btn-success w-100 text-white fw-bold" onClick={enviarWhatsApp}>
                 Enviar WhatsApp
               </button>
             </div>

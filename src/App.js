@@ -55,8 +55,11 @@ const AppContent = () => {
           </Route>
           
           {/* Páginas de detalle de cada plan */}
-          <Route path="/plan-basico" element={<PlanDetalle nombre="Básico" imagen="/images/Beginner.jpg" colorClass="text-primary" caracteristicas={['Dieta personalizada', 'Entrenamiento personalizado', 'Seguimiento por WhatsApp', 'Revisión semanal']} />} />
+          {/* CAMBIO: nombre="Básico" -> nombre="Principiante" */}
+          <Route path="/plan-basico" element={<PlanDetalle nombre="Principiante" imagen="/images/Beginner.jpg" colorClass="text-primary" caracteristicas={['Dieta personalizada', 'Entrenamiento personalizado', ]} />} />
+          
           <Route path="/plan-intermedio" element={<PlanDetalle nombre="Intermedio" imagen="/images/Intermediate.jpg" colorClass="text-success" caracteristicas={['Dieta personalizada', 'Entrenamiento personalizado', 'Seguimiento por WhatsApp', 'Revisión semanal']} />} />
+          
           <Route path="/plan-avanzado" element={<PlanDetalle nombre="Avanzado" imagen="/images/Advance.jpg" colorClass="text-danger" caracteristicas={['Nutrición de élite', 'Programación personalizada', 'Biofeedback y analítica', 'Sesiones de videollamada', 'Preparación puesta a punto']} />} />
         </Routes>
       </div>
